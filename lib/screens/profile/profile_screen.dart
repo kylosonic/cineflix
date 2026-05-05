@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/auth_providers.dart';
+import '../../theme/cine_theme.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -14,6 +17,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLogin = true;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -24,140 +28,218 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider);
+    final authState = ref.watch(authStateProvider);
 
-    if (user != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
-        body: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const CircleAvatar(
-                radius: 40,
-                backgroundColor: Color(0xFFE50914),
-                child: Icon(Icons.person, size: 40, color: Colors.white),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                user.email ?? 'User',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Joined ${user.createdAt.toString().substring(0, 10)}',
-                style: const TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 32),
-              const Divider(color: Colors.grey),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.bookmark, color: Color(0xFFE50914)),
-                title: const Text('My Watchlist'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _navigateToTab(2),
-              ),
-              ListTile(
-                leading: const Icon(Icons.star, color: Colors.amber),
-                title: const Text('My Ratings'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _navigateToTab(2),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => ref.read(authStateProvider.notifier).signOut(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('Sign Out'),
-                ),
-              ),
-            ],
-          ),
-        ),
+    if (authState.user != null) {
+      return _SignedInProfile(
+        userEmail: authState.user?.email ?? 'User',
+        joinedDate: authState.user?.createdAt.toString().substring(0, 10) ?? '',
+        isLoading: authState.isLoading,
+        onSignOut: () => ref.read(authStateProvider.notifier).signOut(),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign In')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: CinematicBackdrop(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 980;
+
+                return ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: isWide
+                      ? Row(
+                          children: [
+                            Expanded(child: _AuthIntro(isLogin: _isLogin)),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: _AuthFormCard(
+                                emailController: _emailController,
+                                passwordController: _passwordController,
+                                isLogin: _isLogin,
+                                obscurePassword: _obscurePassword,
+                                isLoading: authState.isLoading,
+                                error: authState.error,
+                                onTogglePassword: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
+                                onToggleMode: () =>
+                                    setState(() => _isLogin = !_isLogin),
+                                onSubmit: _handleSubmit,
+                              ),
+                            ),
+                          ],
+                        )
+                      : _AuthFormCard(
+                          emailController: _emailController,
+                          passwordController: _passwordController,
+                          isLogin: _isLogin,
+                          obscurePassword: _obscurePassword,
+                          isLoading: authState.isLoading,
+                          error: authState.error,
+                          onTogglePassword: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                          onToggleMode: () =>
+                              setState(() => _isLogin = !_isLogin),
+                          onSubmit: _handleSubmit,
+                          showIntro: true,
+                        ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSubmit() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in both email and password.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      if (_isLogin) {
+        await ref
+            .read(authStateProvider.notifier)
+            .signIn(email: email, password: password);
+      } else {
+        await ref
+            .read(authStateProvider.notifier)
+            .signUp(email: email, password: password);
+      }
+    } catch (_) {
+      // Errors are surfaced via authState.error.
+    }
+  }
+}
+
+class _SignedInProfile extends StatelessWidget {
+  final String userEmail;
+  final String joinedDate;
+  final bool isLoading;
+  final VoidCallback onSignOut;
+
+  const _SignedInProfile({
+    required this.userEmail,
+    required this.joinedDate,
+    required this.isLoading,
+    required this.onSignOut,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = userEmail.isNotEmpty ? userEmail[0].toUpperCase() : 'U';
+
+    return Scaffold(
+      body: CinematicBackdrop(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           children: [
-            const SizedBox(height: 40),
-            const Icon(Icons.movie, size: 80, color: Color(0xFFE50914)),
-            const SizedBox(height: 16),
-            const Text(
-              'CineFlix',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isLogin ? 'Sign in to continue' : 'Create your account',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey, fontSize: 16),
-            ),
-            const SizedBox(height: 40),
-            TextField(
-              controller: _emailController,
-              decoration: InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.email_outlined),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.lock_outlined),
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _handleSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE50914),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            Text('Profile', style: Theme.of(context).textTheme.headlineLarge),
+            const SizedBox(height: 10),
+            CineGlassPanel(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 66,
+                    height: 66,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          CinePalette.accent.withAlpha(240),
+                          CinePalette.accentAlt.withAlpha(220),
+                        ],
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Color(0xFF251900),
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                child: Text(
-                  _isLogin ? 'Sign In' : 'Create Account',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          userEmail,
+                          style: const TextStyle(
+                            color: CinePalette.textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Member since $joinedDate',
+                          style: const TextStyle(
+                            color: CinePalette.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            CineGlassPanel(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
+                  _ProfileActionTile(
+                    icon: Icons.bookmark_rounded,
+                    title: 'Open My Lists',
+                    subtitle: 'View saved titles, favorites, and ratings.',
+                    onTap: () => context.go('/watchlist'),
+                  ),
+                  const Divider(height: 14),
+                  _ProfileActionTile(
+                    icon: Icons.search_rounded,
+                    title: 'Find Something New',
+                    subtitle: 'Search by title, mood, or genre.',
+                    onTap: () => context.go('/search'),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => setState(() => _isLogin = !_isLogin),
-              child: Text(
-                _isLogin
-                    ? "Don't have an account? Sign Up"
-                    : 'Already have an account? Sign In',
-                style: const TextStyle(color: Colors.grey),
+            OutlinedButton.icon(
+              onPressed: isLoading ? null : onSignOut,
+              icon: isLoading
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.logout_rounded),
+              label: const Text('Sign Out'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFFFA8A8),
+                side: const BorderSide(color: Color(0xFFFF8D8D)),
               ),
             ),
           ],
@@ -165,36 +247,222 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
+}
 
-  void _navigateToTab(int index) {
-    // Switch to the watchlist tab by updating navigation
-    final nav = Navigator.of(context);
-    nav.popUntil((route) => route.isFirst);
+class _AuthIntro extends StatelessWidget {
+  final bool isLogin;
+
+  const _AuthIntro({required this.isLogin});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'CineFlix',
+            style: GoogleFonts.dmSerifDisplay(
+              fontSize: 62,
+              color: CinePalette.accent,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isLogin
+                ? 'Jump back in and continue your movie journey.'
+                : 'Create your account and build your personal cinema.',
+            style: const TextStyle(
+              color: CinePalette.textMuted,
+              fontSize: 16,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
 
-  void _handleSubmit() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+class _AuthFormCard extends StatelessWidget {
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final bool isLogin;
+  final bool obscurePassword;
+  final bool isLoading;
+  final String? error;
+  final VoidCallback onTogglePassword;
+  final VoidCallback onToggleMode;
+  final VoidCallback onSubmit;
+  final bool showIntro;
 
-    if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
-      );
-      return;
-    }
+  const _AuthFormCard({
+    required this.emailController,
+    required this.passwordController,
+    required this.isLogin,
+    required this.obscurePassword,
+    required this.isLoading,
+    required this.error,
+    required this.onTogglePassword,
+    required this.onToggleMode,
+    required this.onSubmit,
+    this.showIntro = false,
+  });
 
-    try {
-      if (_isLogin) {
-        await ref.read(authStateProvider.notifier).signIn(email: email, password: password);
-      } else {
-        await ref.read(authStateProvider.notifier).signUp(email: email, password: password);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
+  @override
+  Widget build(BuildContext context) {
+    return CineGlassPanel(
+      borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showIntro) ...[
+            Text(
+              'CineFlix',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSerifDisplay(
+                fontSize: 44,
+                color: CinePalette.accent,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Text(
+            isLogin ? 'Welcome back' : 'Create account',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isLogin
+                ? 'Sign in to sync your lists and ratings.'
+                : 'Start building your personal watch universe.',
+            style: const TextStyle(color: CinePalette.textMuted),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: passwordController,
+            obscureText: obscurePassword,
+            decoration: InputDecoration(
+              labelText: 'Password',
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+              suffixIcon: IconButton(
+                onPressed: onTogglePassword,
+                icon: Icon(
+                  obscurePassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                ),
+              ),
+            ),
+            onSubmitted: (_) => onSubmit(),
+          ),
+          const SizedBox(height: 14),
+          ElevatedButton(
+            onPressed: isLoading ? null : onSubmit,
+            child: isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(isLogin ? 'Sign In' : 'Create Account'),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: isLoading ? null : onToggleMode,
+            child: Text(
+              isLogin
+                  ? 'Need an account? Sign Up'
+                  : 'Already have an account? Sign In',
+            ),
+          ),
+          if (error != null && error!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                error!,
+                style: const TextStyle(color: Color(0xFFFFB0B0), fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ProfileActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: CinePalette.accent.withAlpha(220),
+              ),
+              child: Icon(icon, color: const Color(0xFF271B02)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: CinePalette.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: CinePalette.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: CinePalette.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

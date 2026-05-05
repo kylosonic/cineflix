@@ -1,83 +1,162 @@
-import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/movie.dart';
+import '../theme/cine_theme.dart';
 
-class MovieCard extends StatelessWidget {
+class MovieCard extends StatefulWidget {
   final Movie movie;
   final bool isLarge;
 
   const MovieCard({super.key, required this.movie, this.isLarge = false});
 
   @override
-  Widget build(BuildContext context) {
-    final width = isLarge ? 180.0 : 130.0;
-    final height = isLarge ? 270.0 : 195.0;
+  State<MovieCard> createState() => _MovieCardState();
+}
 
-    return GestureDetector(
-      onTap: () => context.push('/movie/${movie.id}'),
-      child: Container(
-        width: width,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: height,
+class _MovieCardState extends State<MovieCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = widget.isLarge ? 190.0 : 142.0;
+    final height = widget.isLarge ? 282.0 : 212.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () => context.push('/movie/${widget.movie.id}'),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: width,
+          margin: const EdgeInsets.only(right: 12),
+          transform: Matrix4.translationValues(0, _hovered ? -4.0 : 0, 0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: CinePalette.stroke.withAlpha(130)),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: CinePalette.accent.withAlpha(38),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(15),
+                  topRight: Radius.circular(15),
+                ),
+                child: SizedBox(
+                  height: height,
+                  width: width,
+                  child: _buildPoster(),
+                ),
+              ),
+              Container(
                 width: width,
-                child: movie.posterPath != null
-                    ? CachedNetworkImage(
-                        imageUrl: movie.posterUrl!,
-                        fit: BoxFit.cover,
-                        placeholder: (c, s) => Container(
-                          color: Colors.grey[900],
-                          child: const Center(
-                            child: Icon(Icons.movie, color: Colors.grey),
-                          ),
-                        ),
-                        errorWidget: (c, s, e) => Container(
-                          color: Colors.grey[900],
-                          child: const Center(
-                            child: Icon(Icons.broken_image, color: Colors.grey),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        color: Colors.grey[900],
-                        child: const Center(
-                          child: Icon(Icons.movie, color: Colors.grey),
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              movie.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: isLarge ? 14 : 12,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-              ),
-            ),
-            Row(
-              children: [
-                const Icon(Icons.star, size: 14, color: Colors.amber),
-                const SizedBox(width: 2),
-                Text(
-                  movie.voteAverage.toStringAsFixed(1),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                decoration: BoxDecoration(
+                  color: CinePalette.surface.withAlpha(175),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(15),
+                    bottomRight: Radius.circular(15),
                   ),
                 ),
-              ],
-            ),
-          ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.movie.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: widget.isLarge ? 14 : 12,
+                        fontWeight: FontWeight.w700,
+                        color: CinePalette.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: CinePalette.accent,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          widget.movie.voteAverage.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: CinePalette.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            widget.movie.releaseDate?.split('-').first ??
+                                'Unknown',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: CinePalette.textMuted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPoster() {
+    if (widget.movie.posterPath == null || widget.movie.posterUrl == null) {
+      return Container(
+        color: CinePalette.surfaceAlt,
+        child: const Center(
+          child: Icon(
+            Icons.movie_creation_outlined,
+            color: CinePalette.textMuted,
+          ),
+        ),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: widget.movie.posterUrl!,
+      fit: BoxFit.cover,
+      placeholder: (context, _) => Container(
+        color: CinePalette.surfaceAlt,
+        child: const Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
+      errorWidget: (context, url, error) => Container(
+        color: CinePalette.surfaceAlt,
+        child: const Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: CinePalette.textMuted,
+          ),
         ),
       ),
     );

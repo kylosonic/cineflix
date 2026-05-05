@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../providers/movie_providers.dart';
 import '../../providers/auth_providers.dart';
+import '../../providers/movie_providers.dart';
+import '../../theme/cine_theme.dart';
 
 class WatchlistScreen extends ConsumerWidget {
   const WatchlistScreen({super.key});
@@ -12,21 +13,49 @@ class WatchlistScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final watchlistState = ref.watch(watchlistProvider);
-    final ratingsState = ref.watch(ratingsProvider);
     final favoritesState = ref.watch(favoritesProvider);
+    final ratingsState = ref.watch(ratingsProvider);
 
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('My Lists')),
-        body: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.lock_outline, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
-              Text('Sign in to manage your watchlist',
-                  style: TextStyle(color: Colors.grey, fontSize: 16)),
-            ],
+        body: CinematicBackdrop(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: CineGlassPanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.lock_outline_rounded,
+                      size: 56,
+                      color: CinePalette.accent,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Sign in to unlock your lists',
+                      style: Theme.of(context).textTheme.titleLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Track favorites, save watchlist picks, and keep your ratings in one place.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: CinePalette.textMuted,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      onPressed: () => context.go('/profile'),
+                      icon: const Icon(Icons.login_rounded),
+                      label: const Text('Go to Sign In'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       );
@@ -35,88 +64,195 @@ class WatchlistScreen extends ConsumerWidget {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My Lists'),
-          bottom: const TabBar(
-            labelColor: Color(0xFFE50914),
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Color(0xFFE50914),
-            tabs: [
-              Tab(text: 'Watchlist'),
-              Tab(text: 'Rated'),
-              Tab(text: 'Favorites'),
+        body: CinematicBackdrop(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'My Lists',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Everything you saved, loved, and rated.',
+                      style: TextStyle(color: CinePalette.textMuted),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _StatTile(
+                            label: 'Watchlist',
+                            value: watchlistState.movies.length,
+                            icon: Icons.bookmark_rounded,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _StatTile(
+                            label: 'Favorites',
+                            value: favoritesState.movies.length,
+                            icon: Icons.favorite_rounded,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _StatTile(
+                            label: 'Rated',
+                            value: ratingsState.ratings.length,
+                            icon: Icons.star_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    CineGlassPanel(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      borderRadius: BorderRadius.circular(14),
+                      child: const TabBar(
+                        tabs: [
+                          Tab(text: 'Watchlist'),
+                          Tab(text: 'Rated'),
+                          Tab(text: 'Favorites'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _MovieCollectionGrid(
+                      rows: watchlistState.movies,
+                      isLoading: watchlistState.isLoading,
+                      emptyTitle: 'Your watchlist is empty',
+                      emptySubtitle:
+                          'Add titles from Home or Detail to plan your next movie night.',
+                    ),
+                    _RatedMoviesList(
+                      ratingsMap: ratingsState.ratings,
+                      ratedRows: ratingsState.ratedMovies,
+                      isLoading: ratingsState.isLoading,
+                    ),
+                    _MovieCollectionGrid(
+                      rows: favoritesState.movies,
+                      isLoading: favoritesState.isLoading,
+                      emptyTitle: 'No favorites yet',
+                      emptySubtitle:
+                          'Tap the heart-worthy titles and keep them close.',
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _buildMovieGrid(context, watchlistState.movies, 'watchlist'),
-            _buildRatedList(ratingsState.ratings),
-            _buildMovieGrid(context, favoritesState.movies, 'favorites'),
-          ],
-        ),
       ),
     );
   }
+}
 
-  Widget _buildMovieGrid(BuildContext context, List<Map<String, dynamic>> movies, String type) {
-    if (movies.isEmpty) {
-      return Center(
-        child: Text(
-          type == 'watchlist'
-              ? 'No movies in your watchlist'
-              : 'No favorites yet',
-          style: const TextStyle(color: Colors.grey),
-        ),
-      );
-    }
+class _StatTile extends StatelessWidget {
+  final String label;
+  final int value;
+  final IconData icon;
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.55,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: movies.length,
-      itemBuilder: (context, index) {
-        return _StoredMovieCard(data: movies[index]);
-      },
-    );
-  }
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
-  Widget _buildRatedList(Map<int, double> rated) {
-    if (rated.isEmpty) {
-      return const Center(
-        child: Text('No ratings yet', style: TextStyle(color: Colors.grey)),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: rated.length,
-      itemBuilder: (context, index) {
-        final entry = rated.entries.elementAt(index);
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Colors.amber,
-            child: Text(
-              entry.value.toStringAsFixed(0),
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
+  @override
+  Widget build(BuildContext context) {
+    return CineGlassPanel(
+      borderRadius: BorderRadius.circular(14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: CinePalette.accent, size: 18),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$value',
+                  style: const TextStyle(
+                    color: CinePalette.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: CinePalette.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
           ),
-          title: Text('Movie #${entry.key}',
-              style: const TextStyle(color: Colors.white)),
-          trailing: RatingBarIndicator(
-            rating: entry.value / 2,
-            itemSize: 20,
-            itemBuilder: (_, __) =>
-                const Icon(Icons.star, color: Colors.amber),
+        ],
+      ),
+    );
+  }
+}
+
+class _MovieCollectionGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> rows;
+  final bool isLoading;
+  final String emptyTitle;
+  final String emptySubtitle;
+
+  const _MovieCollectionGrid({
+    required this.rows,
+    required this.isLoading,
+    required this.emptyTitle,
+    required this.emptySubtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (rows.isEmpty) {
+      return _ListEmptyState(title: emptyTitle, subtitle: emptySubtitle);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = width > 1350
+            ? 6
+            : width > 1100
+            ? 5
+            : width > 880
+            ? 4
+            : width > 620
+            ? 3
+            : 2;
+
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            childAspectRatio: 0.58,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 14,
           ),
+          itemCount: rows.length,
+          itemBuilder: (context, index) {
+            return _StoredMovieCard(row: rows[index]);
+          },
         );
       },
     );
@@ -124,56 +260,265 @@ class WatchlistScreen extends ConsumerWidget {
 }
 
 class _StoredMovieCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const _StoredMovieCard({required this.data});
+  final Map<String, dynamic> row;
+
+  const _StoredMovieCard({required this.row});
 
   @override
   Widget build(BuildContext context) {
-    final title = data['title']?.toString() ?? 'Unknown';
-    final posterPath = data['poster_path']?.toString();
+    final payload = _extractPayload(row);
+    final title = payload['title']?.toString() ?? 'Unknown title';
     final voteAverage =
-        double.tryParse(data['vote_average']?.toString() ?? '0') ?? 0;
-    final movieId = int.tryParse(data['id']?.toString() ?? '0') ?? 0;
+        double.tryParse(payload['vote_average']?.toString() ?? '0') ?? 0;
+    final posterPath = payload['poster_path']?.toString();
+    final releaseYear =
+        payload['release_date']?.toString().split('-').first ?? '';
+    final movieId =
+        int.tryParse(
+          payload['id']?.toString() ?? row['movie_id']?.toString() ?? '0',
+        ) ??
+        0;
 
     return GestureDetector(
-      onTap: () {
-        if (movieId > 0) {
-          Navigator.of(context).pushNamed('/movie/$movieId');
-        }
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              height: 195,
-              width: double.infinity,
-              color: Colors.grey[900],
-              child: posterPath != null
-                  ? Image.network(
-                      'https://image.tmdb.org/t/p/w500$posterPath',
-                      fit: BoxFit.cover,
-errorBuilder: (ctx, url, err) => 
-                          const Icon(Icons.movie, color: Colors.grey),
-                    )
-                  : const Icon(Icons.movie, color: Colors.grey),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: Colors.white)),
-          Row(
+      onTap: movieId > 0 ? () => context.push('/movie/$movieId') : null,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: CinePalette.stroke.withAlpha(130)),
+          color: CinePalette.surface.withAlpha(170),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.star, size: 14, color: Colors.amber),
-              const SizedBox(width: 2),
-              Text(voteAverage.toStringAsFixed(1),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: posterPath == null
+                      ? const ColoredBox(color: CinePalette.surfaceAlt)
+                      : Image.network(
+                          _posterUrl(posterPath),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, url, error) =>
+                              const ColoredBox(color: CinePalette.surfaceAlt),
+                        ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: CinePalette.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: CinePalette.accent,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          voteAverage.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: CinePalette.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (releaseYear.isNotEmpty)
+                          Text(
+                            releaseYear,
+                            style: const TextStyle(
+                              color: CinePalette.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _extractPayload(Map<String, dynamic> source) {
+    final nested = source['movie_data'];
+    if (nested is Map<String, dynamic>) return nested;
+    if (nested is Map) return Map<String, dynamic>.from(nested);
+    return source;
+  }
+
+  String _posterUrl(String posterPath) {
+    if (posterPath.startsWith('http://') || posterPath.startsWith('https://')) {
+      return posterPath;
+    }
+    return 'https://image.tmdb.org/t/p/w500$posterPath';
+  }
+}
+
+class _RatedMoviesList extends StatelessWidget {
+  final Map<int, double> ratingsMap;
+  final List<Map<String, dynamic>> ratedRows;
+  final bool isLoading;
+
+  const _RatedMoviesList({
+    required this.ratingsMap,
+    required this.ratedRows,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (ratingsMap.isEmpty && ratedRows.isEmpty) {
+      return const _ListEmptyState(
+        title: 'No ratings yet',
+        subtitle:
+            'Rate titles from the detail page to build your taste profile.',
+      );
+    }
+
+    final rows = ratedRows.isNotEmpty
+        ? ratedRows
+        : ratingsMap.entries
+              .map((entry) => {'movie_id': entry.key, 'rating': entry.value})
+              .toList();
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+      itemBuilder: (_, index) {
+        final row = rows[index];
+        final movieId = int.tryParse(row['movie_id']?.toString() ?? '0') ?? 0;
+        final rating = double.tryParse(row['rating']?.toString() ?? '0') ?? 0;
+
+        return CineGlassPanel(
+          borderRadius: BorderRadius.circular(14),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: CinePalette.accent,
+                    ),
+                    child: Center(
+                      child: Text(
+                        rating.toStringAsFixed(0),
+                        style: const TextStyle(
+                          color: Color(0xFF261A01),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Movie #$movieId',
+                      style: const TextStyle(
+                        color: CinePalette.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: movieId > 0
+                        ? () => context.push('/movie/$movieId')
+                        : null,
+                    child: const Text('Open'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: (rating / 10).clamp(0, 1),
+                  minHeight: 7,
+                  color: CinePalette.accent,
+                  backgroundColor: CinePalette.surfaceAlt.withAlpha(170),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Your score: ${rating.toStringAsFixed(1)} / 10',
+                style: const TextStyle(
+                  color: CinePalette.textMuted,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemCount: rows.length,
+    );
+  }
+}
+
+class _ListEmptyState extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _ListEmptyState({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: CineGlassPanel(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.movie_filter_outlined,
+                size: 42,
+                color: CinePalette.accent,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: CinePalette.textMuted,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
