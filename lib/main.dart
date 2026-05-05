@@ -19,17 +19,23 @@ final _routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
-          GoRoute(path: '/search', builder: (context, state) => const SearchScreen()),
-          GoRoute(path: '/watchlist', builder: (context, state) => const WatchlistScreen()),
-          GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(path: '/', pageBuilder: (context, state) => const NoTransitionPage(child: HomeScreen())),
+          GoRoute(path: '/search', pageBuilder: (context, state) => const NoTransitionPage(child: SearchScreen())),
+          GoRoute(path: '/watchlist', pageBuilder: (context, state) => const NoTransitionPage(child: WatchlistScreen())),
+          GoRoute(path: '/profile', pageBuilder: (context, state) => const NoTransitionPage(child: ProfileScreen())),
         ],
       ),
       GoRoute(
         path: '/movie/:movieId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final movieId = int.parse(state.pathParameters['movieId']!);
-          return MovieDetailScreen(movieId: movieId);
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: MovieDetailScreen(movieId: movieId),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          );
         },
       ),
     ],
@@ -40,18 +46,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
   await AppConfig.init();
-
   final supabaseService = SupabaseService();
-  try {
-    await supabaseService.initSupabase();
-  } catch (_) {}
-
+  try { await supabaseService.initSupabase(); } catch (_) {}
   runApp(const ProviderScope(child: CineFlixApp()));
 }
 
 class CineFlixApp extends ConsumerWidget {
   const CineFlixApp({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(_routerProvider);
@@ -61,30 +62,27 @@ class CineFlixApp extends ConsumerWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFF5C518),        // IMDb gold
-          secondary: Color(0xFF5799EF),       // IMDb blue
-          surface: Color(0xFF1A1A1A),         // Dark surface
+          primary: Color(0xFFF5C518),
+          secondary: Color(0xFF5799EF),
+          surface: Color(0xFF141414),
           onSurface: Color(0xFFFFFFFF),
           onPrimary: Color(0xFF000000),
-          error: Color(0xFFE50914),
         ),
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.dark().textTheme,
-        ).copyWith(
-          headlineLarge: GoogleFonts.playfairDisplay(
-            fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white,
-          ),
-          headlineMedium: GoogleFonts.playfairDisplay(
-            fontSize: 24, fontWeight: FontWeight.w700, color: Colors.white,
-          ),
-          titleLarge: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
-          titleMedium: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
-          bodyLarge: const TextStyle(fontSize: 16, color: Color(0xFFCCCCCC)),
-          bodyMedium: const TextStyle(fontSize: 14, color: Color(0xFF999999)),
-          labelLarge: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+        scaffoldBackgroundColor: const Color(0xFF0D0D0D),
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
+          headlineLarge: GoogleFonts.playfairDisplay(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
+          headlineMedium: GoogleFonts.playfairDisplay(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
+          titleLarge: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+          titleMedium: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+          bodyLarge: const TextStyle(fontSize: 15, color: Color(0xFFB3B3B3)),
+          bodyMedium: const TextStyle(fontSize: 13, color: Color(0xFF808080)),
+          labelLarge: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3),
         ),
         useMaterial3: true,
+        pageTransitionsTheme: const PageTransitionsTheme(builders: {
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        }),
       ),
       routerConfig: router,
     );
@@ -94,186 +92,133 @@ class CineFlixApp extends ConsumerWidget {
 class AppShell extends StatelessWidget {
   final Widget child;
   const AppShell({super.key, required this.child});
-
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 900;
-
-    if (isWide) {
-      return _WebShell(child: child);
-    }
-    return _MobileShell(child: child);
+    return isWide ? _WebShell(child: child) : _MobileShell(child: child);
   }
 }
 
-// ──────────────────────────────────────────
-//  Mobile Shell — Netflix-style bottom nav
-// ──────────────────────────────────────────
-
+// ── Mobile Shell ──
 class _MobileShell extends StatelessWidget {
   final Widget child;
   const _MobileShell({required this.child});
-
   @override
   Widget build(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
     return Scaffold(
       body: child,
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xFF2A2A2A), width: 0.5)),
-        ),
-        child: NavigationBar(
-          selectedIndex: _calculateSelectedIndex(context),
-          onDestinationSelected: (index) => _onItemTapped(index, context),
-          backgroundColor: const Color(0xFF0A0A0A),
-          indicatorColor: const Color(0xF5C518).withAlpha(40),
-          height: 60,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined, size: 24),
-              selectedIcon: Icon(Icons.home, size: 24, color: Color(0xFFF5C518)),
-              label: 'Home',
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFF1F1F1F), width: 0.5))),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _MobileNavItem(icon: Icons.home_rounded, label: 'Home', active: currentPath == '/', onTap: () => context.go('/')),
+                _MobileNavItem(icon: Icons.search_rounded, label: 'Search', active: currentPath.startsWith('/search'), onTap: () => context.go('/search')),
+                _MobileNavItem(icon: Icons.bookmark_rounded, label: 'Saved', active: currentPath.startsWith('/watchlist'), onTap: () => context.go('/watchlist')),
+                _MobileNavItem(icon: Icons.person_rounded, label: 'Profile', active: currentPath.startsWith('/profile'), onTap: () => context.go('/profile')),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.search_outlined, size: 24),
-              selectedIcon: Icon(Icons.search, size: 24, color: Color(0xFFF5C518)),
-              label: 'Search',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.bookmark_outline, size: 24),
-              selectedIcon: Icon(Icons.bookmark, size: 24, color: Color(0xFFF5C518)),
-              label: 'Watchlist',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline, size: 24),
-              selectedIcon: Icon(Icons.person, size: 24, color: Color(0xFFF5C518)),
-              label: 'Profile',
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
 
-  int _calculateSelectedIndex(BuildContext context) {
-    final location = GoRouterState.of(context).uri.path;
-    if (location == '/') return 0;
-    if (location.startsWith('/search')) return 1;
-    if (location.startsWith('/watchlist')) return 2;
-    if (location.startsWith('/profile')) return 3;
-    return 0;
-  }
-
-  void _onItemTapped(int index, BuildContext context) {
-    switch (index) {
-      case 0: context.go('/');
-      case 1: context.go('/search');
-      case 2: context.go('/watchlist');
-      case 3: context.go('/profile');
-    }
+class _MobileNavItem extends StatelessWidget {
+  final IconData icon; final String label; final bool active; final VoidCallback onTap;
+  const _MobileNavItem({required this.icon, required this.label, required this.active, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFF5C518).withAlpha(18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 22, color: active ? const Color(0xFFF5C518) : const Color(0xFF666666)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.w600 : FontWeight.w400, color: active ? const Color(0xFFF5C518) : const Color(0xFF666666))),
+        ]),
+      ),
+    );
   }
 }
 
-// ──────────────────────────────────────────
-//  Web Shell — IMDb-style sidebar + top bar
-// ──────────────────────────────────────────
-
+// ── Web Shell ──
 class _WebShell extends StatelessWidget {
   final Widget child;
   const _WebShell({required this.child});
-
   @override
   Widget build(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
     return Scaffold(
-      body: Row(
-        children: [
-          // Sidebar
-          Container(
-            width: 220,
-            color: const Color(0xFF0A0A0A),
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: GestureDetector(
-                    onTap: () => context.go('/'),
-                    child: Text('CineFlix',
-                        style: GoogleFonts.playfairDisplay(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFFF5C518),
-                        )),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                _SidebarItem(icon: Icons.home, label: 'Home', path: '/', currentPath: GoRouterState.of(context).uri.path),
-                const SizedBox(height: 16),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Divider(color: Color(0xFF2A2A2A)),
-                ),
-                const SizedBox(height: 16),
-                _SidebarItem(icon: Icons.search, label: 'Search', path: '/search', currentPath: GoRouterState.of(context).uri.path),
-                _SidebarItem(icon: Icons.bookmark, label: 'Watchlist', path: '/watchlist', currentPath: GoRouterState.of(context).uri.path),
-                _SidebarItem(icon: Icons.person, label: 'Profile', path: '/profile', currentPath: GoRouterState.of(context).uri.path),
-              ],
+      body: Row(children: [
+        Container(
+          width: 200,
+          color: const Color(0xFF0A0A0A),
+          child: Column(children: [
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () => context.go('/'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                child: Text('CineFlix', style: GoogleFonts.playfairDisplay(fontSize: 24, fontWeight: FontWeight.w900, color: const Color(0xFFF5C518))),
+              ),
             ),
-          ),
-          // Main content
-          Expanded(child: child),
-        ],
-      ),
+            const SizedBox(height: 24),
+            _SidebarItem(icon: Icons.home_rounded, label: 'Home', active: currentPath == '/', onTap: () => context.go('/')),
+            _SidebarItem(icon: Icons.search_rounded, label: 'Search', active: currentPath.startsWith('/search'), onTap: () => context.go('/search')),
+            _SidebarItem(icon: Icons.bookmark_rounded, label: 'Watchlist', active: currentPath.startsWith('/watchlist'), onTap: () => context.go('/watchlist')),
+            const Spacer(),
+            _SidebarItem(icon: Icons.person_rounded, label: 'Profile', active: currentPath.startsWith('/profile'), onTap: () => context.go('/profile')),
+            const SizedBox(height: 16),
+          ]),
+        ),
+        Expanded(child: child),
+      ]),
     );
   }
 }
 
-class _SidebarItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String path;
-  final String currentPath;
+class _SidebarItem extends StatefulWidget {
+  final IconData icon; final String label; final bool active; final VoidCallback onTap;
+  const _SidebarItem({required this.icon, required this.label, required this.active, required this.onTap});
+  @override
+  State<_SidebarItem> createState() => _SidebarItemState();
+}
 
-  const _SidebarItem({
-    required this.icon, required this.label,
-    required this.path, required this.currentPath,
-  });
-
+class _SidebarItemState extends State<_SidebarItem> {
+  bool _hovered = false;
   @override
   Widget build(BuildContext context) {
-    final isActive = currentPath == path ||
-        (path.contains('?tab=') && currentPath == '/');
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      child: Material(
-        color: isActive ? const Color(0xFFF5C518).withAlpha(25) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () {
-            if (path.contains('?tab=')) {
-              context.go(path);
-            } else {
-              context.go(path);
-            }
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Icon(icon, size: 20,
-                    color: isActive ? const Color(0xFFF5C518) : const Color(0xFF999999)),
-                const SizedBox(width: 12),
-                Text(label, style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                  color: isActive ? Colors.white : const Color(0xFF999999),
-                )),
-              ],
-            ),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: widget.active ? const Color(0xFFF5C518).withAlpha(22) : (_hovered ? Colors.white.withAlpha(8) : Colors.transparent),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Row(children: [
+            Icon(widget.icon, size: 18, color: widget.active ? const Color(0xFFF5C518) : const Color(0xFF888888)),
+            const SizedBox(width: 10),
+            Text(widget.label, style: TextStyle(fontSize: 13, fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400, color: widget.active ? Colors.white : const Color(0xFF888888))),
+          ]),
         ),
       ),
     );
