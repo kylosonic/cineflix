@@ -47,3 +47,34 @@ flutter run
 flutter test
 flutter analyze
 ```
+
+## Deploying To Vercel
+
+This project uses a custom Vercel build step in `scripts/vercel-build.sh`.
+The script installs Flutter in CI, creates a `.env` file from Vercel environment variables, and runs `flutter build web --release`.
+
+Set these environment variables in Vercel before deploying:
+
+- `TMDB_API_KEY` (required)
+- `SUPABASE_URL` (required)
+- `SUPABASE_ANON_KEY` (required)
+- `TMDB_BASE_URL` (optional, default: `https://api.themoviedb.org/3`)
+- `TMDB_IMAGE_BASE_URL` (optional, default: `https://image.tmdb.org/t/p`)
+
+### GitHub Actions Prebuilt Deploy (Recommended)
+
+Use `.github/workflows/deploy-web-vercel-prebuilt.yml` to build Flutter web on GitHub and deploy prebuilt output to Vercel.
+This avoids running Flutter builds inside Vercel for each deployment.
+
+Add these GitHub repository secrets:
+
+- `VERCEL_TOKEN` (required)
+- `VERCEL_ORG_ID` (required)
+- `VERCEL_PROJECT_ID` (required)
+- `TMDB_API_KEY` (required)
+- `SUPABASE_URL` (required)
+- `SUPABASE_ANON_KEY` (required)
+- `TMDB_BASE_URL` (optional, default: `https://api.themoviedb.org/3`)
+- `TMDB_IMAGE_BASE_URL` (optional, default: `https://image.tmdb.org/t/p`)
+
+If your Vercel project is connected to GitHub auto-deploy, disable automatic Git deployments to avoid duplicate production deployments from both Vercel and GitHub Actions.

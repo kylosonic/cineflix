@@ -30,3 +30,4 @@ ios/Runner/GeneratedPluginRegistrant.*
 Thumbs.db
 .vercel
 .vercel/output/
+.flutter-sdk/
