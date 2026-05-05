@@ -6,14 +6,20 @@ class TmdbService {
   late final Dio _dio;
 
   TmdbService() {
+    final apiKey = AppConfig.tmdbApiKey;
+    final isV4Token = apiKey.startsWith('eyJ'); // JWT token = v4 auth
+
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.tmdbBaseUrl,
-      queryParameters: {
-        'api_key': AppConfig.tmdbApiKey,
-      },
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
     ));
+
+    if (isV4Token) {
+      _dio.options.headers['Authorization'] = 'Bearer $apiKey';
+    } else {
+      _dio.options.queryParameters = {'api_key': apiKey};
+    }
 
     _dio.interceptors.add(LogInterceptor(
       requestBody: false,
