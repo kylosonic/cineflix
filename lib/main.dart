@@ -209,9 +209,6 @@ class _WebShell extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
                 _SidebarItem(icon: Icons.home, label: 'Home', path: '/', currentPath: GoRouterState.of(context).uri.path),
-                _SidebarItem(icon: Icons.local_fire_department, label: 'Trending', path: '/?tab=trending', currentPath: GoRouterState.of(context).uri.path),
-                _SidebarItem(icon: Icons.star, label: 'Top Rated', path: '/?tab=toprated', currentPath: GoRouterState.of(context).uri.path),
-                _SidebarItem(icon: Icons.movie, label: 'Now Playing', path: '/?tab=nowplaying', currentPath: GoRouterState.of(context).uri.path),
                 const SizedBox(height: 16),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 20),
