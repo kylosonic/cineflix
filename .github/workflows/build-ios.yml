@@ -1,0 +1,65 @@
+name: Build Unsigned iOS IPA
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS (unsigned IPA)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          echo "TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}" >> .env
+          echo "TMDB_BASE_URL=${{ secrets.TMDB_BASE_URL }}" >> .env
+          echo "TMDB_IMAGE_BASE_URL=${{ secrets.TMDB_IMAGE_BASE_URL }}" >> .env
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build iOS (no codesign)
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/Release-iphoneos/Runner.app Payload/
+          zip -r CineFlix-unsigned.ipa Payload/
+          rm -rf Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CineFlix-unsigned-iOS
+          path: CineFlix-unsigned.ipa
+          retention-days: 30
+
+      - name: Upload Runner.app artifact (for sideloading)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CineFlix-Runner.app
+          path: build/ios/Release-iphoneos/Runner.app
+          retention-days: 30
