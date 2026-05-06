@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -53,10 +54,14 @@ class _MovieCardNetflixState extends State<MovieCardNetflix> {
                 fit: StackFit.expand,
                 children: [
                   widget.movie.posterPath != null
-                      ? Image.network(
-                          widget.movie.posterUrl!,
+                      ? CachedNetworkImage(
+                          imageUrl: widget.movie.posterUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) =>
+                          memCacheWidth: 300,
+                          fadeInDuration: const Duration(milliseconds: 120),
+                          placeholder: (context, url) =>
+                              Container(color: CinePalette.surface),
+                          errorWidget: (context, url, error) =>
                               Container(color: CinePalette.surface),
                         )
                       : Container(color: CinePalette.surface),

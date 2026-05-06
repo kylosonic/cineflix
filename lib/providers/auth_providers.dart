@@ -9,11 +9,7 @@ class AuthState {
   final bool isLoading;
   final String? error;
 
-  const AuthState({
-    this.user,
-    this.isLoading = false,
-    this.error,
-  });
+  const AuthState({this.user, this.isLoading = false, this.error});
 
   bool get isAuthenticated => user != null;
 
@@ -37,17 +33,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final SupabaseService _supabaseService;
 
   AuthNotifier(this._supabaseService) : super(const AuthState()) {
-    // Check if a user is already signed in on app start
-    final currentUser = _supabaseService.getCurrentUser();
-    if (currentUser != null) {
-      state = AuthState(user: currentUser);
+    _restoreExistingSession();
+  }
+
+  Future<void> _restoreExistingSession() async {
+    try {
+      await _supabaseService.ensureInitialized();
+      final currentUser = _supabaseService.getCurrentUser();
+      if (currentUser != null) {
+        state = AuthState(user: currentUser);
+      }
+    } catch (_) {
+      // Session restore is best-effort; app remains usable without auth.
     }
   }
 
-  Future<void> signUp({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signUp({required String email, required String password}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final response = await _supabaseService.signUp(
@@ -56,17 +57,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       state = AuthState(user: response.user);
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final response = await _supabaseService.signIn(
@@ -75,10 +70,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       state = AuthState(user: response.user);
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
@@ -88,10 +80,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _supabaseService.signOut();
       state = const AuthState();
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
@@ -113,8 +102,7 @@ final supabaseServiceProvider = Provider<SupabaseService>((ref) {
 });
 
 /// The main auth state provider — notifies listeners on sign-in/out.
-final authStateProvider =
-    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final supabaseService = ref.watch(supabaseServiceProvider);
   return AuthNotifier(supabaseService);
 });

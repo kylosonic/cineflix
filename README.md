@@ -78,3 +78,28 @@ Add these GitHub repository secrets:
 - `TMDB_IMAGE_BASE_URL` (optional, default: `https://image.tmdb.org/t/p`)
 
 If your Vercel project is connected to GitHub auto-deploy, disable automatic Git deployments to avoid duplicate production deployments from both Vercel and GitHub Actions.
+
+## Mobile Release Automation (Unsigned APK + IPA)
+
+Use `.github/workflows/release-mobile-artifacts.yml` to build and publish mobile artifacts to GitHub Releases.
+
+- Trigger automatically on tags matching `v*`.
+- Can also be triggered manually from GitHub Actions (`workflow_dispatch`).
+- Publishes these release assets:
+	- `CineFlix-android-unsigned.apk`
+	- `CineFlix-ios-unsigned.ipa`
+
+### Required GitHub Secrets
+
+- `TMDB_API_KEY` (required)
+- `SUPABASE_URL` (required)
+- `SUPABASE_ANON_KEY` (required)
+- `TMDB_BASE_URL` (optional)
+- `TMDB_IMAGE_BASE_URL` (optional)
+
+### Website Download Targets
+
+The web app download buttons point to:
+
+- `https://github.com/kylosonic/cineflix/releases/latest/download/CineFlix-android-unsigned.apk`
+- `https://github.com/kylosonic/cineflix/releases/latest/download/CineFlix-ios-unsigned.ipa`

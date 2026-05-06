@@ -7,9 +7,28 @@ class SupabaseService {
   SupabaseService._internal();
 
   SupabaseClient? _client;
+  bool _isInitialized = false;
+  Future<void>? _initializationFuture;
+
+  Future<void> ensureInitialized() {
+    if (_isInitialized) return Future.value();
+    if (_initializationFuture != null) return _initializationFuture!;
+
+    _initializationFuture = _initializeInternal().whenComplete(() {
+      _initializationFuture = null;
+    });
+
+    return _initializationFuture!;
+  }
 
   /// Initialize the Supabase client using values from .env
   Future<void> initSupabase() async {
+    await ensureInitialized();
+  }
+
+  Future<void> _initializeInternal() async {
+    if (_isInitialized) return;
+
     final url = dotenv.env['SUPABASE_URL'] ?? '';
     final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
@@ -20,12 +39,10 @@ class SupabaseService {
       );
     }
 
-    await Supabase.initialize(
-      url: url,
-      anonKey: anonKey,
-    );
+    await Supabase.initialize(url: url, anonKey: anonKey);
 
     _client = Supabase.instance.client;
+    _isInitialized = true;
   }
 
   /// Returns the Supabase client instance — must call [initSupabase] first
@@ -47,6 +64,7 @@ class SupabaseService {
     required String email,
     required String password,
   }) async {
+    await ensureInitialized();
     return client.auth.signUp(email: email, password: password);
   }
 
@@ -55,17 +73,20 @@ class SupabaseService {
     required String email,
     required String password,
   }) async {
+    await ensureInitialized();
     return client.auth.signInWithPassword(email: email, password: password);
   }
 
   /// Sign out the current user
   Future<void> signOut() async {
+    await ensureInitialized();
     return client.auth.signOut();
   }
 
   /// Get the currently authenticated user (null if not signed in)
   User? getCurrentUser() {
-    return client.auth.currentUser;
+    if (!_isInitialized || _client == null) return null;
+    return _client!.auth.currentUser;
   }
 
   // ──────────────────────────────────────────────
@@ -78,6 +99,7 @@ class SupabaseService {
     required int movieId,
     required Map<String, dynamic> movieData,
   }) async {
+    await ensureInitialized();
     await client.from('watchlist').upsert({
       'user_id': userId,
       'movie_id': movieId,
@@ -90,6 +112,7 @@ class SupabaseService {
     required String userId,
     required int movieId,
   }) async {
+    await ensureInitialized();
     await client
         .from('watchlist')
         .delete()
@@ -99,6 +122,7 @@ class SupabaseService {
 
   /// Get the full watchlist for a user
   Future<List<Map<String, dynamic>>> getWatchlist(String userId) async {
+    await ensureInitialized();
     final response = await client
         .from('watchlist')
         .select()
@@ -118,6 +142,7 @@ class SupabaseService {
     required int movieId,
     required double rating,
   }) async {
+    await ensureInitialized();
     await client.from('ratings').upsert({
       'user_id': userId,
       'movie_id': movieId,
@@ -130,6 +155,7 @@ class SupabaseService {
     required String userId,
     required int movieId,
   }) async {
+    await ensureInitialized();
     final response = await client
         .from('ratings')
         .select('rating')
@@ -143,6 +169,7 @@ class SupabaseService {
 
   /// Get all movies rated by a user (with their ratings)
   Future<List<Map<String, dynamic>>> getRatedMovies(String userId) async {
+    await ensureInitialized();
     final response = await client
         .from('ratings')
         .select()
@@ -162,6 +189,7 @@ class SupabaseService {
     required int movieId,
     required Map<String, dynamic> movieData,
   }) async {
+    await ensureInitialized();
     await client.from('favorites').upsert({
       'user_id': userId,
       'movie_id': movieId,
@@ -174,6 +202,7 @@ class SupabaseService {
     required String userId,
     required int movieId,
   }) async {
+    await ensureInitialized();
     await client
         .from('favorites')
         .delete()
@@ -183,6 +212,7 @@ class SupabaseService {
 
   /// Get the full favorites list for a user
   Future<List<Map<String, dynamic>>> getFavorites(String userId) async {
+    await ensureInitialized();
     final response = await client
         .from('favorites')
         .select()

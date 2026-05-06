@@ -1,10 +1,11 @@
 import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'config/app_config.dart';
 import 'screens/home/home_screen.dart';
@@ -64,12 +65,23 @@ final _routerProvider = Provider<GoRouter>((ref) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load();
   await AppConfig.init();
+
+  final cache = PaintingBinding.instance.imageCache;
+  cache.maximumSize = 400;
+  cache.maximumSizeBytes = 256 << 20;
+
   final supabaseService = SupabaseService();
-  try {
-    await supabaseService.initSupabase();
-  } catch (_) {}
+  unawaited(
+    Future<void>(() async {
+      try {
+        await supabaseService.ensureInitialized();
+      } catch (_) {
+        // Do not block app startup on optional auth backend initialization.
+      }
+    }),
+  );
+
   runApp(const ProviderScope(child: CineFlixApp()));
 }
 
@@ -225,6 +237,12 @@ class _MobileNavItem extends StatelessWidget {
 class _WebShell extends StatelessWidget {
   final Widget child;
   const _WebShell({required this.child});
+
+  Future<void> _openReleaseUrl(String rawUrl) async {
+    final uri = Uri.parse(rawUrl);
+    await launchUrl(uri, mode: LaunchMode.platformDefault);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentPath = GoRouterState.of(context).uri.path;
@@ -296,6 +314,60 @@ class _WebShell extends StatelessWidget {
                   label: 'My Lists',
                   active: currentPath.startsWith('/watchlist'),
                   onTap: () => context.go('/watchlist'),
+                ),
+                const SizedBox(height: 8),
+                CineGlassPanel(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Get Mobile App',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Download the latest unsigned Android APK or iOS IPA from GitHub Releases.',
+                        style: TextStyle(
+                          color: CinePalette.textMuted,
+                          height: 1.4,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              _openReleaseUrl(AppConfig.androidDownloadUrl),
+                          icon: const Icon(Icons.android_rounded, size: 18),
+                          label: const Text('Download Android APK'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              _openReleaseUrl(AppConfig.iosDownloadUrl),
+                          icon: const Icon(
+                            Icons.phone_iphone_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Download iOS IPA'),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: () =>
+                              _openReleaseUrl(AppConfig.githubReleasePageUrl),
+                          child: const Text('Open all releases'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const Spacer(),
                 CineGlassPanel(

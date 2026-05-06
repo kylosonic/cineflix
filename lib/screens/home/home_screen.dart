@@ -1,9 +1,12 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_config.dart';
 import '../../models/movie.dart';
 import '../../providers/movie_providers.dart';
 import '../../theme/cine_theme.dart';
@@ -19,11 +22,29 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeTab = 'trending';
 
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      ref.read(trendingMoviesProvider.future);
+      ref.read(nowPlayingMoviesProvider(1).future);
+      ref.read(topRatedMoviesProvider(1).future);
+      ref.read(popularMoviesProvider(1).future);
+    });
+  }
+
   Future<void> _refreshAll() async {
     ref.invalidate(trendingMoviesProvider);
     ref.invalidate(popularMoviesProvider(1));
     ref.invalidate(topRatedMoviesProvider(1));
     ref.invalidate(nowPlayingMoviesProvider(1));
+
+    await Future.wait([
+      ref.read(trendingMoviesProvider.future),
+      ref.read(popularMoviesProvider(1).future),
+      ref.read(topRatedMoviesProvider(1).future),
+      ref.read(nowPlayingMoviesProvider(1).future),
+    ]);
   }
 
   AsyncValue<List<Movie>> _activeCollection() {
@@ -134,6 +155,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   nowPlaying: ref.watch(nowPlayingMoviesProvider(1)),
                 ),
               ),
+              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              const SliverToBoxAdapter(child: _WebDownloadStrip()),
               const SliverToBoxAdapter(child: SizedBox(height: 18)),
               SliverToBoxAdapter(
                 child: _CategoryTabs(
@@ -308,10 +331,14 @@ class _FeaturedHero extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   if (hero.backdropUrl != null)
-                    Image.network(
-                      hero.backdropUrl!,
+                    CachedNetworkImage(
+                      imageUrl: hero.backdropUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, url, error) =>
+                      memCacheWidth: 1600,
+                      fadeInDuration: const Duration(milliseconds: 140),
+                      placeholder: (context, url) =>
+                          const ColoredBox(color: CinePalette.surface),
+                      errorWidget: (context, url, error) =>
                           const ColoredBox(color: CinePalette.surface),
                     )
                   else
@@ -647,6 +674,58 @@ class _WebHeroBand extends StatelessWidget {
   }
 }
 
+class _WebDownloadStrip extends StatelessWidget {
+  const _WebDownloadStrip();
+
+  Future<void> _openReleaseUrl(String rawUrl) async {
+    final uri = Uri.parse(rawUrl);
+    await launchUrl(uri, mode: LaunchMode.platformDefault);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CineGlassPanel(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Install On Mobile',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Grab the latest unsigned APK and IPA from GitHub Releases.',
+            style: TextStyle(color: CinePalette.textMuted),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _openReleaseUrl(AppConfig.androidDownloadUrl),
+                icon: const Icon(Icons.android_rounded, size: 18),
+                label: const Text('Android APK'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _openReleaseUrl(AppConfig.iosDownloadUrl),
+                icon: const Icon(Icons.phone_iphone_rounded, size: 18),
+                label: const Text('iOS IPA'),
+              ),
+              TextButton(
+                onPressed: () =>
+                    _openReleaseUrl(AppConfig.githubReleasePageUrl),
+                child: const Text('All Releases'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MiniMovieRow extends StatelessWidget {
   final Movie movie;
 
@@ -674,10 +753,14 @@ class _MiniMovieRow extends StatelessWidget {
                 height: 92,
                 child: movie.posterUrl == null
                     ? const ColoredBox(color: CinePalette.backgroundSoft)
-                    : Image.network(
-                        movie.posterUrl!,
+                    : CachedNetworkImage(
+                        imageUrl: movie.posterUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, url, error) =>
+                        memCacheWidth: 220,
+                        fadeInDuration: const Duration(milliseconds: 120),
+                        placeholder: (context, url) =>
+                            const ColoredBox(color: CinePalette.backgroundSoft),
+                        errorWidget: (context, url, error) =>
                             const ColoredBox(color: CinePalette.backgroundSoft),
                       ),
               ),
@@ -781,10 +864,14 @@ class _WebPosterCardState extends State<_WebPosterCard> {
               fit: StackFit.expand,
               children: [
                 if (widget.movie.posterUrl != null)
-                  Image.network(
-                    widget.movie.posterUrl!,
+                  CachedNetworkImage(
+                    imageUrl: widget.movie.posterUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, url, error) =>
+                    memCacheWidth: 420,
+                    fadeInDuration: const Duration(milliseconds: 120),
+                    placeholder: (context, url) =>
+                        const ColoredBox(color: CinePalette.surface),
+                    errorWidget: (context, url, error) =>
                         const ColoredBox(color: CinePalette.surface),
                   )
                 else
