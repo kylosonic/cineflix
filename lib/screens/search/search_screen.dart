@@ -293,31 +293,50 @@ class _GenreChip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => _GenreMoviesScreen(genre: genre)),
-        );
-      },
-      borderRadius: BorderRadius.circular(14),
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              CinePalette.accent.withAlpha(190),
-              CinePalette.accentAlt.withAlpha(190),
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => _GenreMoviesScreen(genre: genre)),
+          );
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF30CFCB).withAlpha(235),
+                const Color(0xFFFFC45E).withAlpha(238),
+              ],
+            ),
+            border: Border.all(color: const Color(0xFFFFFFFF).withAlpha(42)),
+            boxShadow: [
+              BoxShadow(
+                color: CinePalette.accentAlt.withAlpha(55),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
             ],
           ),
-        ),
-        child: Center(
-          child: Text(
-            genre.name,
-            style: const TextStyle(
-              color: Color(0xFF211600),
-              fontWeight: FontWeight.w800,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                genre.name,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF04111A),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  letterSpacing: 0.1,
+                ),
+              ),
             ),
           ),
         ),
