@@ -10,6 +10,7 @@ import '../../config/app_config.dart';
 import '../../models/movie.dart';
 import '../../providers/movie_providers.dart';
 import '../../theme/cine_theme.dart';
+import '../../widgets/movie_card.dart';
 import '../../widgets/movie_card_netflix.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -22,39 +23,41 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeTab = 'trending';
 
+  MovieFeedType get _activeFeedType {
+    return switch (_activeTab) {
+      'trending' => MovieFeedType.trending,
+      'toprated' => MovieFeedType.topRated,
+      'nowplaying' => MovieFeedType.nowPlaying,
+      'popular' => MovieFeedType.popular,
+      _ => MovieFeedType.trending,
+    };
+  }
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref.read(trendingMoviesProvider.future);
-      ref.read(nowPlayingMoviesProvider(1).future);
-      ref.read(topRatedMoviesProvider(1).future);
-      ref.read(popularMoviesProvider(1).future);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(pagedMoviesProvider(MovieFeedType.trending));
+      ref.read(pagedMoviesProvider(MovieFeedType.nowPlaying));
+      ref.read(pagedMoviesProvider(MovieFeedType.topRated));
+      ref.read(pagedMoviesProvider(MovieFeedType.popular));
+      ref.read(genresProvider.future);
     });
   }
 
   Future<void> _refreshAll() async {
-    ref.invalidate(trendingMoviesProvider);
-    ref.invalidate(popularMoviesProvider(1));
-    ref.invalidate(topRatedMoviesProvider(1));
-    ref.invalidate(nowPlayingMoviesProvider(1));
+    ref.invalidate(genresProvider);
 
     await Future.wait([
-      ref.read(trendingMoviesProvider.future),
-      ref.read(popularMoviesProvider(1).future),
-      ref.read(topRatedMoviesProvider(1).future),
-      ref.read(nowPlayingMoviesProvider(1).future),
+      ref.read(pagedMoviesProvider(MovieFeedType.trending).notifier).refresh(),
+      ref.read(pagedMoviesProvider(MovieFeedType.popular).notifier).refresh(),
+      ref.read(pagedMoviesProvider(MovieFeedType.topRated).notifier).refresh(),
+      ref
+          .read(pagedMoviesProvider(MovieFeedType.nowPlaying).notifier)
+          .refresh(),
+      ref.read(genresProvider.future),
     ]);
-  }
-
-  AsyncValue<List<Movie>> _activeCollection() {
-    return switch (_activeTab) {
-      'trending' => ref.watch(trendingMoviesProvider),
-      'toprated' => ref.watch(topRatedMoviesProvider(1)),
-      'nowplaying' => ref.watch(nowPlayingMoviesProvider(1)),
-      'popular' => ref.watch(popularMoviesProvider(1)),
-      _ => ref.watch(trendingMoviesProvider),
-    };
   }
 
   @override
@@ -64,6 +67,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildMobileLayout(BuildContext context) {
+    final trendingState = ref.watch(
+      pagedMoviesProvider(MovieFeedType.trending),
+    );
+
     return Scaffold(
       body: CinematicBackdrop(
         child: RefreshIndicator(
@@ -83,7 +90,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               SliverToBoxAdapter(
                 child: _FeaturedHero(
-                  asyncMovies: ref.watch(trendingMoviesProvider),
+                  movies: trendingState.movies,
+                  isLoading: trendingState.isLoadingInitial,
+                  error: trendingState.error,
                 ),
               ),
               SliverToBoxAdapter(
@@ -92,32 +101,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onSelected: (next) => setState(() => _activeTab = next),
                 ),
               ),
+              const SliverToBoxAdapter(child: _GenreScroller()),
               SliverToBoxAdapter(
-                child: _RowSection(
+                child: _PagedRowSection(
                   title: 'Trending Heat',
                   subtitle: 'What everyone is watching now',
-                  asyncMovies: ref.watch(trendingMoviesProvider),
+                  feedType: MovieFeedType.trending,
                 ),
               ),
               SliverToBoxAdapter(
-                child: _RowSection(
+                child: _PagedRowSection(
                   title: 'Now in Theaters',
                   subtitle: 'Fresh releases worth a night out',
-                  asyncMovies: ref.watch(nowPlayingMoviesProvider(1)),
+                  feedType: MovieFeedType.nowPlaying,
                 ),
               ),
               SliverToBoxAdapter(
-                child: _RowSection(
+                child: _PagedRowSection(
                   title: 'Top Rated Gems',
                   subtitle: 'Critics and fans can\'t stop talking about these',
-                  asyncMovies: ref.watch(topRatedMoviesProvider(1)),
+                  feedType: MovieFeedType.topRated,
                 ),
               ),
               SliverToBoxAdapter(
-                child: _RowSection(
+                child: _PagedRowSection(
                   title: 'Popular Right Now',
                   subtitle: 'Massive audience favorites',
-                  asyncMovies: ref.watch(popularMoviesProvider(1)),
+                  feedType: MovieFeedType.popular,
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 115)),
@@ -129,96 +139,147 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildWebLayout(BuildContext context) {
+    final activeFeedType = _activeFeedType;
+    final activeCollection = ref.watch(pagedMoviesProvider(activeFeedType));
+    final trendingState = ref.watch(
+      pagedMoviesProvider(MovieFeedType.trending),
+    );
+    final nowPlayingState = ref.watch(
+      pagedMoviesProvider(MovieFeedType.nowPlaying),
+    );
+
     return Scaffold(
       body: CinematicBackdrop(
         padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
         child: RefreshIndicator(
           color: CinePalette.accent,
           onRefresh: _refreshAll,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.axis != Axis.vertical) return false;
+              final remaining =
+                  notification.metrics.maxScrollExtent -
+                  notification.metrics.pixels;
+              if (remaining < 720) {
+                ref
+                    .read(pagedMoviesProvider(activeFeedType).notifier)
+                    .loadMore();
+              }
+              return false;
+            },
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _HomeHeader(
+                    title: 'Discover Stories That Stick',
+                    subtitle:
+                        'Curated collections and cinematic picks that feel alive on every screen.',
+                    onSearch: () => context.go('/search'),
+                    isWide: true,
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: _WebHeroBand(
+                    trending: trendingState,
+                    nowPlaying: nowPlayingState,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                const SliverToBoxAdapter(child: _WebDownloadStrip()),
+                const SliverToBoxAdapter(child: SizedBox(height: 18)),
+                SliverToBoxAdapter(
+                  child: _CategoryTabs(
+                    activeTab: _activeTab,
+                    onSelected: (next) => setState(() => _activeTab = next),
+                    isWide: true,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                const SliverToBoxAdapter(child: _GenreScroller(isWide: true)),
+                const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                SliverToBoxAdapter(
+                  child: _buildWebGrid(activeCollection, activeFeedType),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+              ],
             ),
-            slivers: [
-              SliverToBoxAdapter(
-                child: _HomeHeader(
-                  title: 'Discover Stories That Stick',
-                  subtitle:
-                      'Curated collections and cinematic picks that feel alive on every screen.',
-                  onSearch: () => context.go('/search'),
-                  isWide: true,
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: _WebHeroBand(
-                  trending: ref.watch(trendingMoviesProvider),
-                  nowPlaying: ref.watch(nowPlayingMoviesProvider(1)),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 12)),
-              const SliverToBoxAdapter(child: _WebDownloadStrip()),
-              const SliverToBoxAdapter(child: SizedBox(height: 18)),
-              SliverToBoxAdapter(
-                child: _CategoryTabs(
-                  activeTab: _activeTab,
-                  onSelected: (next) => setState(() => _activeTab = next),
-                  isWide: true,
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 14)),
-              SliverToBoxAdapter(child: _buildWebGrid(_activeCollection())),
-              const SliverToBoxAdapter(child: SizedBox(height: 40)),
-            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildWebGrid(AsyncValue<List<Movie>> asyncMovies) {
-    return asyncMovies.when(
-      data: (movies) {
-        final visible = movies.where((m) => m.posterPath != null).toList();
-        if (visible.isEmpty) {
-          return const _InlineStateCard(
-            title: 'No titles available yet',
-            subtitle: 'Try a different collection or pull to refresh.',
-            icon: Icons.hourglass_empty_rounded,
-          );
-        }
+  Widget _buildWebGrid(
+    PagedMovieCollectionState collection,
+    MovieFeedType feedType,
+  ) {
+    if (collection.isLoadingInitial && collection.movies.isEmpty) {
+      return const _ShimmerGrid();
+    }
 
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final columns = width > 1500
-                ? 6
-                : width > 1300
-                ? 5
-                : 4;
+    if (collection.error != null && collection.movies.isEmpty) {
+      return _InlineStateCard(
+        title: 'Could not load this collection',
+        subtitle: collection.error!,
+        icon: Icons.wifi_off_rounded,
+      );
+    }
 
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: visible.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                childAspectRatio: 0.62,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 14,
-              ),
-              itemBuilder: (context, index) {
-                return _WebPosterCard(movie: visible[index]);
-              },
-            );
+    final visible = collection.movies
+        .where((m) => m.posterPath != null)
+        .toList();
+    if (visible.isEmpty) {
+      return const _InlineStateCard(
+        title: 'No titles available yet',
+        subtitle: 'Try a different collection or pull to refresh.',
+        icon: Icons.hourglass_empty_rounded,
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = width > 1700
+            ? 7
+            : width > 1500
+            ? 6
+            : width > 1300
+            ? 5
+            : 4;
+
+        final itemCount = visible.length + (collection.isLoadingMore ? 1 : 0);
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: itemCount,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            childAspectRatio: 0.62,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 14,
+          ),
+          itemBuilder: (context, index) {
+            if (index >= visible.length) {
+              return const _GridLoadingCard();
+            }
+
+            if (collection.hasNextPage &&
+                !collection.isLoadingMore &&
+                index >= visible.length - 4) {
+              Future.microtask(
+                () =>
+                    ref.read(pagedMoviesProvider(feedType).notifier).loadMore(),
+              );
+            }
+
+            return _WebPosterCard(movie: visible[index]);
           },
         );
       },
-      loading: () => const _ShimmerGrid(),
-      error: (error, _) => _InlineStateCard(
-        title: 'Could not load this collection',
-        subtitle: error.toString(),
-        icon: Icons.wifi_off_rounded,
-      ),
     );
   }
 }
@@ -283,189 +344,197 @@ class _HomeHeader extends StatelessWidget {
 }
 
 class _FeaturedHero extends StatelessWidget {
-  final AsyncValue<List<Movie>> asyncMovies;
+  final List<Movie> movies;
+  final bool isLoading;
+  final String? error;
 
-  const _FeaturedHero({required this.asyncMovies});
+  const _FeaturedHero({
+    required this.movies,
+    required this.isLoading,
+    required this.error,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return asyncMovies.when(
-      data: (movies) {
-        final hero =
-            movies
-                .where((movie) => movie.backdropPath != null)
-                .cast<Movie?>()
-                .firstOrNull ??
-            movies.firstOrNull;
-
-        if (hero == null) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: _InlineStateCard(
-              title: 'No featured movie available',
-              subtitle: 'Pull to refresh and try again.',
-              icon: Icons.theaters_outlined,
-            ),
-          );
-        }
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: GestureDetector(
-            onTap: () => context.push('/movie/${hero.id}'),
-            child: Container(
-              height: 268,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: CinePalette.stroke.withAlpha(130)),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 24,
-                    offset: const Offset(0, 14),
-                    color: Colors.black.withAlpha(90),
-                  ),
-                ],
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (hero.backdropUrl != null)
-                    CachedNetworkImage(
-                      imageUrl: hero.backdropUrl!,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 1600,
-                      fadeInDuration: const Duration(milliseconds: 140),
-                      placeholder: (context, url) =>
-                          const ColoredBox(color: CinePalette.surface),
-                      errorWidget: (context, url, error) =>
-                          const ColoredBox(color: CinePalette.surface),
-                    )
-                  else
-                    const ColoredBox(color: CinePalette.surface),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withAlpha(20),
-                          Colors.black.withAlpha(60),
-                          Colors.black.withAlpha(215),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    top: 16,
-                    child: CineGlassPanel(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      borderRadius: BorderRadius.circular(999),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.local_fire_department_rounded,
-                            color: CinePalette.accent,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Featured Tonight',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          hero.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.dmSerifDisplay(
-                            fontSize: 30,
-                            color: CinePalette.textPrimary,
-                            height: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          hero.overview,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFE7EAF4),
-                            fontSize: 13,
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: CinePalette.accent,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                '${hero.voteAverage.toStringAsFixed(1)} rating',
-                                style: const TextStyle(
-                                  color: Color(0xFF251900),
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (hero.releaseDate != null &&
-                                hero.releaseDate!.length >= 4)
-                              Text(
-                                hero.releaseDate!.substring(0, 4),
-                                style: const TextStyle(
-                                  color: Color(0xFFD8DFF0),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      loading: () => const Padding(
+    if (isLoading && movies.isEmpty) {
+      return const Padding(
         padding: EdgeInsets.symmetric(horizontal: 16),
         child: _FeaturedSkeleton(),
-      ),
-      error: (error, _) => Padding(
+      );
+    }
+
+    if (error != null && movies.isEmpty) {
+      return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: _InlineStateCard(
           title: 'Featured section unavailable',
-          subtitle: error.toString(),
+          subtitle: error!,
           icon: Icons.error_outline_rounded,
+        ),
+      );
+    }
+
+    final hero =
+        movies
+            .where((movie) => movie.backdropPath != null)
+            .cast<Movie?>()
+            .firstOrNull ??
+        movies.firstOrNull;
+
+    if (hero == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: _InlineStateCard(
+          title: 'No featured movie available',
+          subtitle: 'Pull to refresh and try again.',
+          icon: Icons.theaters_outlined,
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: GestureDetector(
+        onTap: () => context.push('/movie/${hero.id}'),
+        child: Container(
+          height: 268,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: CinePalette.stroke.withAlpha(130)),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 24,
+                offset: const Offset(0, 14),
+                color: Colors.black.withAlpha(90),
+              ),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (hero.backdropUrl != null)
+                CachedNetworkImage(
+                  imageUrl: hero.backdropUrl!,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 1600,
+                  fadeInDuration: const Duration(milliseconds: 140),
+                  placeholder: (context, url) =>
+                      const ColoredBox(color: CinePalette.surface),
+                  errorWidget: (context, url, error) =>
+                      const ColoredBox(color: CinePalette.surface),
+                )
+              else
+                const ColoredBox(color: CinePalette.surface),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withAlpha(20),
+                      Colors.black.withAlpha(60),
+                      Colors.black.withAlpha(215),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                top: 16,
+                child: CineGlassPanel(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.local_fire_department_rounded,
+                        color: CinePalette.accent,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Featured Tonight',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hero.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.dmSerifDisplay(
+                        fontSize: 30,
+                        color: CinePalette.textPrimary,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      hero.overview,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFE7EAF4),
+                        fontSize: 13,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: CinePalette.accent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${hero.voteAverage.toStringAsFixed(1)} rating',
+                            style: const TextStyle(
+                              color: Color(0xFF251900),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (hero.releaseDate != null &&
+                            hero.releaseDate!.length >= 4)
+                          Text(
+                            hero.releaseDate!.substring(0, 4),
+                            style: const TextStyle(
+                              color: Color(0xFFD8DFF0),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -486,10 +555,10 @@ class _CategoryTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      ('trending', 'Trending'),
-      ('toprated', 'Top Rated'),
-      ('nowplaying', 'Now Playing'),
-      ('popular', 'Popular'),
+      ('trending', 'Trending', Icons.local_fire_department_rounded),
+      ('toprated', 'Top Rated', Icons.workspace_premium_rounded),
+      ('nowplaying', 'Now Playing', Icons.movie_filter_rounded),
+      ('popular', 'Popular', Icons.trending_up_rounded),
     ];
 
     return Padding(
@@ -501,26 +570,11 @@ class _CategoryTabs extends StatelessWidget {
               .map(
                 (tab) => Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    selected: activeTab == tab.$1,
-                    label: Text(tab.$2),
-                    onSelected: (_) => onSelected(tab.$1),
-                    selectedColor: CinePalette.accent.withAlpha(230),
-                    labelStyle: TextStyle(
-                      color: activeTab == tab.$1
-                          ? const Color(0xFF2A1900)
-                          : CinePalette.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                      side: BorderSide(
-                        color: activeTab == tab.$1
-                            ? Colors.transparent
-                            : CinePalette.stroke.withAlpha(140),
-                      ),
-                    ),
-                    backgroundColor: CinePalette.surface.withAlpha(180),
+                  child: _CategoryTabPill(
+                    active: activeTab == tab.$1,
+                    icon: tab.$3,
+                    label: tab.$2,
+                    onTap: () => onSelected(tab.$1),
                   ),
                 ),
               )
@@ -531,19 +585,307 @@ class _CategoryTabs extends StatelessWidget {
   }
 }
 
-class _RowSection extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final AsyncValue<List<Movie>> asyncMovies;
+class _CategoryTabPill extends StatelessWidget {
+  final bool active;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
 
-  const _RowSection({
-    required this.title,
-    required this.subtitle,
-    required this.asyncMovies,
+  const _CategoryTabPill({
+    required this.active,
+    required this.icon,
+    required this.label,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          gradient: active
+              ? LinearGradient(
+                  colors: [
+                    CinePalette.accent.withAlpha(245),
+                    const Color(0xFFFFCF79),
+                  ],
+                )
+              : LinearGradient(
+                  colors: [
+                    CinePalette.surface.withAlpha(210),
+                    CinePalette.surfaceAlt.withAlpha(180),
+                  ],
+                ),
+          border: Border.all(
+            color: active
+                ? Colors.transparent
+                : CinePalette.stroke.withAlpha(170),
+          ),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: CinePalette.accent.withAlpha(62),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: active ? const Color(0xFF2A1900) : CinePalette.textPrimary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: active
+                    ? const Color(0xFF2A1900)
+                    : CinePalette.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GenreScroller extends ConsumerWidget {
+  final bool isWide;
+
+  const _GenreScroller({this.isWide = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final genresAsync = ref.watch(genresProvider);
+
+    return genresAsync.when(
+      data: (genres) {
+        if (genres.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final visibleGenres = genres.take(isWide ? 16 : 10).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(left: isWide ? 0 : 16),
+              child: Text(
+                'Browse Categories',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 40,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.only(left: isWide ? 0 : 16, right: 16),
+                itemCount: visibleGenres.length,
+                itemBuilder: (context, index) {
+                  final genre = visibleGenres[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                _HomeGenreMoviesScreen(genre: genre),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(999),
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          gradient: LinearGradient(
+                            colors: [
+                              CinePalette.accentAlt.withAlpha(198),
+                              CinePalette.accent.withAlpha(195),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: CinePalette.accentAlt.withAlpha(45),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          genre.name,
+                          style: const TextStyle(
+                            color: Color(0xFF0D1725),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => SizedBox(
+        height: 40,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.only(left: isWide ? 0 : 16, right: 16),
+          itemCount: 6,
+          itemBuilder: (context, index) => Container(
+            width: 92,
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              color: CinePalette.surface.withAlpha(160),
+              border: Border.all(color: CinePalette.stroke.withAlpha(120)),
+            ),
+          ),
+        ),
+      ),
+      error: (error, stackTrace) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _HomeGenreMoviesScreen extends ConsumerWidget {
+  final Genre genre;
+
+  const _HomeGenreMoviesScreen({required this.genre});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final collection = ref.watch(pagedGenreMoviesProvider(genre.id));
+
+    return Scaffold(
+      appBar: AppBar(title: Text(genre.name)),
+      body: CinematicBackdrop(
+        topSafeArea: false,
+        child: _buildGenreBody(context, ref, collection),
+      ),
+    );
+  }
+
+  Widget _buildGenreBody(
+    BuildContext context,
+    WidgetRef ref,
+    PagedMovieCollectionState collection,
+  ) {
+    if (collection.isLoadingInitial && collection.movies.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (collection.error != null && collection.movies.isEmpty) {
+      return _InlineStateCard(
+        title: 'Could not load this category',
+        subtitle: collection.error!,
+        icon: Icons.error_outline_rounded,
+      );
+    }
+
+    if (collection.movies.isEmpty) {
+      return const _InlineStateCard(
+        title: 'No movies found',
+        subtitle: 'This category has no available movies right now.',
+        icon: Icons.movie_filter_outlined,
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = width > 1400
+            ? 6
+            : width > 1200
+            ? 5
+            : width > 900
+            ? 4
+            : width > 680
+            ? 3
+            : 2;
+
+        return NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.metrics.axis != Axis.vertical) return false;
+            final remaining =
+                notification.metrics.maxScrollExtent -
+                notification.metrics.pixels;
+            if (remaining < 480) {
+              ref.read(pagedGenreMoviesProvider(genre.id).notifier).loadMore();
+            }
+            return false;
+          },
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 36),
+            itemCount:
+                collection.movies.length + (collection.isLoadingMore ? 1 : 0),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              childAspectRatio: 0.57,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemBuilder: (context, index) {
+              if (index >= collection.movies.length) {
+                return const _GridLoadingCard();
+              }
+
+              if (collection.hasNextPage &&
+                  !collection.isLoadingMore &&
+                  index >= collection.movies.length - 4) {
+                Future.microtask(
+                  () => ref
+                      .read(pagedGenreMoviesProvider(genre.id).notifier)
+                      .loadMore(),
+                );
+              }
+
+              return MovieCard(movie: collection.movies[index]);
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PagedRowSection extends ConsumerWidget {
+  final String title;
+  final String subtitle;
+  final MovieFeedType feedType;
+
+  const _PagedRowSection({
+    required this.title,
+    required this.subtitle,
+    required this.feedType,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final collection = ref.watch(pagedMoviesProvider(feedType));
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Column(
@@ -564,52 +906,85 @@ class _RowSection extends StatelessWidget {
           ),
           SizedBox(
             height: 192,
-            child: asyncMovies.when(
-              data: (movies) {
-                final visible = movies
-                    .where((movie) => movie.posterPath != null)
-                    .toList();
-
-                if (visible.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: _InlineStateCard(
-                      title: 'Nothing here yet',
-                      subtitle: 'This row will populate as data arrives.',
-                      icon: Icons.movie_filter_outlined,
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: visible.length,
-                  itemBuilder: (context, index) {
-                    return MovieCardNetflix(movie: visible[index]);
-                  },
-                );
-              },
-              loading: () => const _ShimmerRow(),
-              error: (error, stackTrace) => const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: _InlineStateCard(
-                  title: 'Could not load this row',
-                  subtitle: 'Pull to refresh and try again.',
-                  icon: Icons.cloud_off_rounded,
-                ),
-              ),
-            ),
+            child: _buildRowContent(context, ref, collection),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRowContent(
+    BuildContext context,
+    WidgetRef ref,
+    PagedMovieCollectionState collection,
+  ) {
+    if (collection.isLoadingInitial && collection.movies.isEmpty) {
+      return const _ShimmerRow();
+    }
+
+    if (collection.error != null && collection.movies.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: _InlineStateCard(
+          title: 'Could not load this row',
+          subtitle: collection.error!,
+          icon: Icons.cloud_off_rounded,
+        ),
+      );
+    }
+
+    final visible = collection.movies
+        .where((movie) => movie.posterPath != null)
+        .toList();
+
+    if (visible.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: _InlineStateCard(
+          title: 'Nothing here yet',
+          subtitle: 'This row will populate as data arrives.',
+          icon: Icons.movie_filter_outlined,
+        ),
+      );
+    }
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.axis != Axis.horizontal) return false;
+        final remaining =
+            notification.metrics.maxScrollExtent - notification.metrics.pixels;
+        if (remaining < 320) {
+          ref.read(pagedMoviesProvider(feedType).notifier).loadMore();
+        }
+        return false;
+      },
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: visible.length + (collection.isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= visible.length) {
+            return const _RowLoadingItem();
+          }
+
+          if (collection.hasNextPage &&
+              !collection.isLoadingMore &&
+              index >= visible.length - 3) {
+            Future.microtask(
+              () => ref.read(pagedMoviesProvider(feedType).notifier).loadMore(),
+            );
+          }
+
+          return MovieCardNetflix(movie: visible[index]);
+        },
       ),
     );
   }
 }
 
 class _WebHeroBand extends StatelessWidget {
-  final AsyncValue<List<Movie>> trending;
-  final AsyncValue<List<Movie>> nowPlaying;
+  final PagedMovieCollectionState trending;
+  final PagedMovieCollectionState nowPlaying;
 
   const _WebHeroBand({required this.trending, required this.nowPlaying});
 
@@ -618,7 +993,13 @@ class _WebHeroBand extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _FeaturedHero(asyncMovies: trending)),
+        Expanded(
+          child: _FeaturedHero(
+            movies: trending.movies,
+            isLoading: trending.isLoadingInitial,
+            error: trending.error,
+          ),
+        ),
         const SizedBox(width: 14),
         Expanded(
           child: CineGlassPanel(
@@ -638,33 +1019,29 @@ class _WebHeroBand extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                nowPlaying.when(
-                  data: (movies) {
-                    final short = movies.take(4).toList();
-                    if (short.isEmpty) {
-                      return const _InlineStateCard(
-                        title: 'No releases loaded',
-                        subtitle: 'Try refreshing in a moment.',
-                        icon: Icons.live_tv_rounded,
-                      );
-                    }
-
-                    return Column(
-                      children: short.map((movie) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _MiniMovieRow(movie: movie),
-                        );
-                      }).toList(),
-                    );
-                  },
-                  loading: () => const _MiniMovieRowSkeleton(),
-                  error: (error, stackTrace) => const _InlineStateCard(
+                if (nowPlaying.isLoadingInitial && nowPlaying.movies.isEmpty)
+                  const _MiniMovieRowSkeleton()
+                else if (nowPlaying.error != null && nowPlaying.movies.isEmpty)
+                  _InlineStateCard(
                     title: 'Unavailable right now',
-                    subtitle: 'Could not load current releases.',
+                    subtitle: nowPlaying.error!,
                     icon: Icons.warning_amber_rounded,
+                  )
+                else if (nowPlaying.movies.isEmpty)
+                  const _InlineStateCard(
+                    title: 'No releases loaded',
+                    subtitle: 'Try refreshing in a moment.',
+                    icon: Icons.live_tv_rounded,
+                  )
+                else
+                  Column(
+                    children: nowPlaying.movies.take(4).map((movie) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _MiniMovieRow(movie: movie),
+                      );
+                    }).toList(),
                   ),
-                ),
               ],
             ),
           ),
@@ -1067,6 +1444,52 @@ class _ShimmerGrid extends StatelessWidget {
             color: CinePalette.surface,
             borderRadius: BorderRadius.circular(16),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RowLoadingItem extends StatelessWidget {
+  const _RowLoadingItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 126,
+      margin: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        color: CinePalette.surface.withAlpha(180),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: CinePalette.stroke.withAlpha(140)),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+}
+
+class _GridLoadingCard extends StatelessWidget {
+  const _GridLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: CinePalette.surface.withAlpha(170),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CinePalette.stroke.withAlpha(130)),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2.2),
         ),
       ),
     );

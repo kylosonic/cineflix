@@ -216,30 +216,36 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildSearchResults(WidgetRef ref) {
-    final resultsAsync = ref.watch(searchResultsProvider(_query));
+    final results = ref.watch(pagedSearchMoviesProvider(_query));
 
-    return resultsAsync.when(
-      data: (movies) {
-        if (movies.isEmpty) {
-          return _InlineSearchState(
-            title: 'No matches for "$_query"',
-            subtitle: 'Try a shorter phrase or another mood.',
-            icon: Icons.search_off_rounded,
-          );
-        }
+    if (results.isLoadingInitial && results.movies.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        return _ResponsiveMovieGrid(
-          key: const ValueKey('results'),
-          movies: movies,
-          topPadding: 6,
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => _InlineSearchState(
+    if (results.error != null && results.movies.isEmpty) {
+      return _InlineSearchState(
         title: 'Search failed',
-        subtitle: error.toString(),
+        subtitle: results.error!,
         icon: Icons.wifi_off_rounded,
-      ),
+      );
+    }
+
+    if (results.movies.isEmpty) {
+      return _InlineSearchState(
+        title: 'No matches for "$_query"',
+        subtitle: 'Try a shorter phrase or another mood.',
+        icon: Icons.search_off_rounded,
+      );
+    }
+
+    return _ResponsiveMovieGrid(
+      key: const ValueKey('results'),
+      movies: results.movies,
+      topPadding: 6,
+      hasNextPage: results.hasNextPage,
+      isLoadingMore: results.isLoadingMore,
+      onLoadMore: () =>
+          ref.read(pagedSearchMoviesProvider(_query).notifier).loadMore(),
     );
   }
 }
@@ -327,32 +333,48 @@ class _GenreMoviesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final moviesAsync = ref.watch(discoverByGenreProvider(genre.id));
+    final movies = ref.watch(pagedGenreMoviesProvider(genre.id));
 
     return Scaffold(
       appBar: AppBar(title: Text(genre.name)),
       body: CinematicBackdrop(
         topSafeArea: false,
-        child: moviesAsync.when(
-          data: (movies) {
-            if (movies.isEmpty) {
-              return const _InlineSearchState(
-                title: 'No movies found',
-                subtitle: 'This genre has no entries right now.',
-                icon: Icons.movie_filter_outlined,
-              );
-            }
-
-            return _ResponsiveMovieGrid(movies: movies);
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => _InlineSearchState(
-            title: 'Could not load this genre',
-            subtitle: error.toString(),
-            icon: Icons.warning_amber_rounded,
-          ),
-        ),
+        child: _buildGenreBody(context, ref, movies),
       ),
+    );
+  }
+
+  Widget _buildGenreBody(
+    BuildContext context,
+    WidgetRef ref,
+    PagedMovieCollectionState movies,
+  ) {
+    if (movies.isLoadingInitial && movies.movies.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (movies.error != null && movies.movies.isEmpty) {
+      return _InlineSearchState(
+        title: 'Could not load this genre',
+        subtitle: movies.error!,
+        icon: Icons.warning_amber_rounded,
+      );
+    }
+
+    if (movies.movies.isEmpty) {
+      return const _InlineSearchState(
+        title: 'No movies found',
+        subtitle: 'This genre has no entries right now.',
+        icon: Icons.movie_filter_outlined,
+      );
+    }
+
+    return _ResponsiveMovieGrid(
+      movies: movies.movies,
+      hasNextPage: movies.hasNextPage,
+      isLoadingMore: movies.isLoadingMore,
+      onLoadMore: () =>
+          ref.read(pagedGenreMoviesProvider(genre.id).notifier).loadMore(),
     );
   }
 }
@@ -360,11 +382,17 @@ class _GenreMoviesScreen extends ConsumerWidget {
 class _ResponsiveMovieGrid extends StatelessWidget {
   final List<Movie> movies;
   final double topPadding;
+  final bool hasNextPage;
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
 
   const _ResponsiveMovieGrid({
     super.key,
     required this.movies,
     this.topPadding = 0,
+    this.hasNextPage = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
   });
 
   @override
@@ -382,19 +410,69 @@ class _ResponsiveMovieGrid extends StatelessWidget {
             ? 4
             : 2;
 
-        return GridView.builder(
-          key: key,
-          padding: EdgeInsets.fromLTRB(16, topPadding, 16, 100),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            childAspectRatio: 0.57,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 14,
+        return NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (onLoadMore == null ||
+                notification.metrics.axis != Axis.vertical) {
+              return false;
+            }
+            final remaining =
+                notification.metrics.maxScrollExtent -
+                notification.metrics.pixels;
+            if (remaining < 520) {
+              onLoadMore!();
+            }
+            return false;
+          },
+          child: GridView.builder(
+            key: key,
+            padding: EdgeInsets.fromLTRB(16, topPadding, 16, 100),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              childAspectRatio: 0.57,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 14,
+            ),
+            itemCount: movies.length + (isLoadingMore ? 1 : 0),
+            itemBuilder: (_, index) {
+              if (index >= movies.length) {
+                return const _GridLoaderCard();
+              }
+
+              if (hasNextPage &&
+                  !isLoadingMore &&
+                  onLoadMore != null &&
+                  index >= movies.length - 4) {
+                Future.microtask(onLoadMore!);
+              }
+
+              return MovieCard(movie: movies[index]);
+            },
           ),
-          itemCount: movies.length,
-          itemBuilder: (_, index) => MovieCard(movie: movies[index]),
         );
       },
+    );
+  }
+}
+
+class _GridLoaderCard extends StatelessWidget {
+  const _GridLoaderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: CinePalette.surface.withAlpha(175),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CinePalette.stroke.withAlpha(130)),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2.2),
+        ),
+      ),
     );
   }
 }

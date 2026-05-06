@@ -119,14 +119,15 @@ class TmdbService {
   }
 
   /// GET /trending/movie/week
-  Future<PaginatedMovies> getTrending() async {
+  Future<PaginatedMovies> getTrending({int page = 1}) async {
     const path = '/trending/movie/week';
+    final params = {'page': page};
     try {
       return _withCache(
-        key: _cacheKey(path),
+        key: _cacheKey(path, params),
         ttl: _shortCache,
         load: () async {
-          final response = await _get(path);
+          final response = await _get(path, queryParameters: params);
           return _parseMovieResponse(response);
         },
       );

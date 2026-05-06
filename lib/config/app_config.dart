@@ -11,11 +11,19 @@ class AppConfig {
     _initialized = true;
   }
 
-  static String get tmdbApiKey => dotenv.env['TMDB_API_KEY'] ?? '';
+  static String _getEnv(String key, String fallback) {
+    try {
+      return dotenv.env[key] ?? fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  static String get tmdbApiKey => _getEnv('TMDB_API_KEY', '');
   static String get tmdbBaseUrl =>
-      dotenv.env['TMDB_BASE_URL'] ?? 'https://api.themoviedb.org/3';
+      _getEnv('TMDB_BASE_URL', 'https://api.themoviedb.org/3');
   static String get tmdbImageBaseUrl =>
-      dotenv.env['TMDB_IMAGE_BASE_URL'] ?? 'https://image.tmdb.org/t/p';
+      _getEnv('TMDB_IMAGE_BASE_URL', 'https://image.tmdb.org/t/p');
 
   static const String githubReleasePageUrl =
       'https://github.com/kylosonic/cineflix/releases/latest';
