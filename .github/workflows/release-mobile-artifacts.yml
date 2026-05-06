@@ -40,6 +40,25 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Validate required secrets
+        shell: bash
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          missing=()
+          for key in TMDB_API_KEY SUPABASE_URL SUPABASE_ANON_KEY; do
+            if [[ -z "${!key}" ]]; then
+              missing+=("$key")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing required GitHub secrets: ${missing[*]}"
+            echo "Add them under Settings → Secrets → Actions before releasing."
+            exit 1
+          fi
+
       - name: Create .env file
         shell: bash
         env:
@@ -118,6 +137,25 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          missing=()
+          for key in TMDB_API_KEY SUPABASE_URL SUPABASE_ANON_KEY; do
+            if [[ -z "${!key}" ]]; then
+              missing+=("$key")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing required GitHub secrets: ${missing[*]}"
+            echo "Add them under Settings → Secrets → Actions before releasing."
+            exit 1
+          fi
 
       - name: Create .env file
         shell: bash
