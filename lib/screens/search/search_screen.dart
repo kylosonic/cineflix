@@ -7,7 +7,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/movie.dart';
 import '../../providers/movie_providers.dart';
 import '../../theme/cine_theme.dart';
+import '../../theme/motion_tokens.dart';
+import '../../widgets/loading/movie_grid_skeleton.dart';
 import '../../widgets/movie_card.dart';
+import '../../widgets/motion/fade_slide_in.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -67,62 +71,91 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Search',
-                          style: GoogleFonts.dmSerifDisplay(
-                            fontSize: 34,
-                            color: CinePalette.textPrimary,
+              child: FadeSlideIn(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Search',
+                            style: GoogleFonts.dmSerifDisplay(
+                              fontSize: 34,
+                              color: CinePalette.textPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Find movies by title, mood, or genre.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'Find movies by title, mood, or genre.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  if (_query.isNotEmpty)
-                    TextButton.icon(
-                      onPressed: _clearSearch,
-                      icon: const Icon(Icons.close_rounded, size: 16),
-                      label: const Text('Clear'),
-                    ),
-                ],
+                    const SizedBox(width: 10),
+                    if (_query.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        label: const Text('Clear'),
+                      ),
+                  ],
+                ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: CineGlassPanel(
-                borderRadius: BorderRadius.circular(18),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(color: CinePalette.textPrimary),
-                  decoration: const InputDecoration(
-                    hintText: 'Try: Inception, comedy, animation...',
-                    border: InputBorder.none,
-                    prefixIcon: Icon(Icons.search_rounded),
+              child: FadeSlideIn(
+                delay: const Duration(milliseconds: 45),
+                child: CineGlassPanel(
+                  borderRadius: BorderRadius.circular(18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
                   ),
-                  onChanged: _onSearchChanged,
-                  onSubmitted: _runQuickSearch,
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: CinePalette.textPrimary),
+                    decoration: const InputDecoration(
+                      hintText: 'Try: Inception, comedy, animation...',
+                      border: InputBorder.none,
+                      prefixIcon: Icon(Icons.search_rounded),
+                    ),
+                    onChanged: _onSearchChanged,
+                    onSubmitted: _runQuickSearch,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 12),
             Expanded(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
+                duration: CineMotion.resolveDuration(
+                  context,
+                  CineMotion.normal,
+                ),
+                switchInCurve: CineMotion.resolveCurve(
+                  context,
+                  Curves.easeOutCubic,
+                ),
+                switchOutCurve: CineMotion.resolveCurve(
+                  context,
+                  Curves.easeInCubic,
+                ),
+                transitionBuilder: (child, animation) {
+                  final reduceMotion = CineMotion.reduceMotion(context);
+                  final slide = Tween<Offset>(
+                    begin: reduceMotion
+                        ? Offset.zero
+                        : const Offset(0.01, 0.01),
+                    end: Offset.zero,
+                  ).animate(animation);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: slide, child: child),
+                  );
+                },
                 child: _query.isEmpty
                     ? _buildDiscovery(ref)
                     : _buildSearchResults(ref),
@@ -143,70 +176,85 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           key: const ValueKey('discovery'),
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
           children: [
-            CineGlassPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Jump In Fast',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Tap a vibe to start exploring instantly.',
-                    style: TextStyle(color: CinePalette.textMuted),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _suggestions
-                        .map(
-                          (suggestion) => _SuggestionChip(
+            StaggeredReveal(
+              index: 0,
+              child: CineGlassPanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Jump In Fast',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Tap a vibe to start exploring instantly.',
+                      style: TextStyle(color: CinePalette.textMuted),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: List<Widget>.generate(_suggestions.length, (
+                        index,
+                      ) {
+                        final suggestion = _suggestions[index];
+                        return StaggeredReveal(
+                          index: index,
+                          step: const Duration(milliseconds: 40),
+                          beginOffset: const Offset(0, 0.01),
+                          child: _SuggestionChip(
                             label: suggestion,
                             onTap: () => _runQuickSearch(suggestion),
                           ),
-                        )
-                        .toList(),
-                  ),
-                ],
+                        );
+                      }),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 14),
-            Text(
-              'Browse by Genre',
-              style: Theme.of(context).textTheme.titleLarge,
+            StaggeredReveal(
+              index: 1,
+              child: Text(
+                'Browse by Genre',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
             const SizedBox(height: 8),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final columns = width > 900
-                    ? 4
-                    : width > 620
-                    ? 3
-                    : 2;
+            StaggeredReveal(
+              index: 2,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columns = width > 900
+                      ? 4
+                      : width > 620
+                      ? 3
+                      : 2;
 
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: genres.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    childAspectRatio: 2.7,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemBuilder: (_, index) {
-                    return _GenreChip(genre: genres[index]);
-                  },
-                );
-              },
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: genres.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      childAspectRatio: 2.7,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemBuilder: (_, index) {
+                      return _GenreChip(genre: genres[index]);
+                    },
+                  );
+                },
+              ),
             ),
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const MovieGridSkeleton(itemCount: 10),
       error: (error, _) => _InlineSearchState(
         title: 'Genres unavailable',
         subtitle: error.toString(),
@@ -219,7 +267,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final results = ref.watch(pagedSearchMoviesProvider(_query));
 
     if (results.isLoadingInitial && results.movies.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const MovieGridSkeleton(itemCount: 12);
     }
 
     if (results.error != null && results.movies.isEmpty) {
@@ -298,7 +346,30 @@ class _GenreChip extends ConsumerWidget {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _GenreMoviesScreen(genre: genre)),
+            PageRouteBuilder<void>(
+              transitionDuration: CineMotion.resolveDuration(
+                context,
+                CineMotion.medium,
+              ),
+              reverseTransitionDuration: CineMotion.resolveDuration(
+                context,
+                CineMotion.normal,
+              ),
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  _GenreMoviesScreen(genre: genre),
+              transitionsBuilder: (context, animation, secondary, child) {
+                final reduceMotion = CineMotion.reduceMotion(context);
+                final slide = Tween<Offset>(
+                  begin: reduceMotion ? Offset.zero : const Offset(0, 0.02),
+                  end: Offset.zero,
+                ).animate(animation);
+
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(position: slide, child: child),
+                );
+              },
+            ),
           );
         },
         borderRadius: BorderRadius.circular(14),
@@ -369,7 +440,7 @@ class _GenreMoviesScreen extends ConsumerWidget {
     PagedMovieCollectionState movies,
   ) {
     if (movies.isLoadingInitial && movies.movies.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const MovieGridSkeleton(itemCount: 10);
     }
 
     if (movies.error != null && movies.movies.isEmpty) {
@@ -465,7 +536,11 @@ class _ResponsiveMovieGrid extends StatelessWidget {
                 Future.microtask(onLoadMore!);
               }
 
-              return MovieCard(movie: movies[index]);
+              final movie = movies[index];
+              return MovieCard(
+                movie: movie,
+                heroTag: 'search-grid-$index-${movie.id}',
+              );
             },
           ),
         );

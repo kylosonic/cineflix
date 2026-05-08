@@ -7,7 +7,9 @@ import '../models/movie.dart';
 
 class MovieCardNetflix extends StatefulWidget {
   final Movie movie;
-  const MovieCardNetflix({super.key, required this.movie});
+  final String? heroTag;
+
+  const MovieCardNetflix({super.key, required this.movie, this.heroTag});
   @override
   State<MovieCardNetflix> createState() => _MovieCardNetflixState();
 }
@@ -25,7 +27,11 @@ class _MovieCardNetflixState extends State<MovieCardNetflix> {
         onTapDown: (_) => setState(() => _pressed = true),
         onTapUp: (_) {
           setState(() => _pressed = false);
-          context.push('/movie/${widget.movie.id}');
+          final heroTag = widget.heroTag;
+          final route = (heroTag == null || heroTag.isEmpty)
+              ? '/movie/${widget.movie.id}'
+              : '/movie/${widget.movie.id}?heroTag=${Uri.encodeComponent(heroTag)}';
+          context.push(route);
         },
         onTapCancel: () => setState(() => _pressed = false),
         child: AnimatedScale(
@@ -53,18 +59,11 @@ class _MovieCardNetflixState extends State<MovieCardNetflix> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  widget.movie.posterPath != null
-                      ? CachedNetworkImage(
-                          imageUrl: widget.movie.posterUrl!,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 300,
-                          fadeInDuration: const Duration(milliseconds: 120),
-                          placeholder: (context, url) =>
-                              Container(color: CinePalette.surface),
-                          errorWidget: (context, url, error) =>
-                              Container(color: CinePalette.surface),
-                        )
-                      : Container(color: CinePalette.surface),
+                  _PosterWithHero(
+                    posterPath: widget.movie.posterPath,
+                    posterUrl: widget.movie.posterUrl,
+                    heroTag: widget.heroTag,
+                  ),
                   Positioned(
                     bottom: 0,
                     left: 0,
@@ -148,5 +147,40 @@ class _MovieCardNetflixState extends State<MovieCardNetflix> {
         ),
       ),
     );
+  }
+}
+
+class _PosterWithHero extends StatelessWidget {
+  final String? posterPath;
+  final String? posterUrl;
+  final String? heroTag;
+
+  const _PosterWithHero({
+    required this.posterPath,
+    required this.posterUrl,
+    required this.heroTag,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final image = posterPath != null && posterUrl != null
+        ? CachedNetworkImage(
+            imageUrl: posterUrl!,
+            fit: BoxFit.cover,
+            memCacheWidth: 300,
+            fadeInDuration: const Duration(milliseconds: 120),
+            placeholder: (context, url) =>
+                Container(color: CinePalette.surface),
+            errorWidget: (context, url, error) =>
+                Container(color: CinePalette.surface),
+          )
+        : Container(color: CinePalette.surface);
+
+    final normalizedTag = heroTag?.trim();
+    if (normalizedTag == null || normalizedTag.isEmpty) {
+      return image;
+    }
+
+    return Hero(tag: normalizedTag, child: image);
   }
 }

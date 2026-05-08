@@ -8,8 +8,14 @@ import '../theme/cine_theme.dart';
 class MovieCard extends StatefulWidget {
   final Movie movie;
   final bool isLarge;
+  final String? heroTag;
 
-  const MovieCard({super.key, required this.movie, this.isLarge = false});
+  const MovieCard({
+    super.key,
+    required this.movie,
+    this.isLarge = false,
+    this.heroTag,
+  });
 
   @override
   State<MovieCard> createState() => _MovieCardState();
@@ -27,7 +33,13 @@ class _MovieCardState extends State<MovieCard> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () => context.push('/movie/${widget.movie.id}'),
+        onTap: () {
+          final heroTag = widget.heroTag;
+          final route = (heroTag == null || heroTag.isEmpty)
+              ? '/movie/${widget.movie.id}'
+              : '/movie/${widget.movie.id}?heroTag=${Uri.encodeComponent(heroTag)}';
+          context.push(route);
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           width: width,
@@ -125,8 +137,10 @@ class _MovieCardState extends State<MovieCard> {
   }
 
   Widget _buildPoster() {
+    Widget poster;
+
     if (widget.movie.posterPath == null || widget.movie.posterUrl == null) {
-      return Container(
+      poster = Container(
         color: CinePalette.surfaceAlt,
         child: const Center(
           child: Icon(
@@ -135,30 +149,37 @@ class _MovieCardState extends State<MovieCard> {
           ),
         ),
       );
+    } else {
+      poster = CachedNetworkImage(
+        imageUrl: widget.movie.posterUrl!,
+        fit: BoxFit.cover,
+        placeholder: (context, _) => Container(
+          color: CinePalette.surfaceAlt,
+          child: const Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: CinePalette.surfaceAlt,
+          child: const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: CinePalette.textMuted,
+            ),
+          ),
+        ),
+      );
     }
 
-    return CachedNetworkImage(
-      imageUrl: widget.movie.posterUrl!,
-      fit: BoxFit.cover,
-      placeholder: (context, _) => Container(
-        color: CinePalette.surfaceAlt,
-        child: const Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      ),
-      errorWidget: (context, url, error) => Container(
-        color: CinePalette.surfaceAlt,
-        child: const Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: CinePalette.textMuted,
-          ),
-        ),
-      ),
-    );
+    final heroTag = widget.heroTag;
+    if (heroTag == null || heroTag.isEmpty) {
+      return poster;
+    }
+
+    return Hero(tag: heroTag, child: poster);
   }
 }

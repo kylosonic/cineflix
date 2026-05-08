@@ -10,8 +10,11 @@ import '../../config/app_config.dart';
 import '../../models/movie.dart';
 import '../../providers/movie_providers.dart';
 import '../../theme/cine_theme.dart';
+import '../../theme/motion_tokens.dart';
 import '../../widgets/movie_card.dart';
 import '../../widgets/movie_card_netflix.dart';
+import '../../widgets/motion/fade_slide_in.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -82,52 +85,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             slivers: [
               SliverToBoxAdapter(
-                child: _HomeHeader(
-                  title: 'Tonight\'s Picks',
-                  subtitle: 'Fresh stories, bold worlds, one tap away.',
-                  onSearch: () => context.go('/search'),
+                child: StaggeredReveal(
+                  index: 0,
+                  child: _HomeHeader(
+                    title: 'Tonight\'s Picks',
+                    subtitle: 'Fresh stories, bold worlds, one tap away.',
+                    onSearch: () => context.go('/search'),
+                  ),
                 ),
               ),
               SliverToBoxAdapter(
-                child: _FeaturedHero(
-                  movies: trendingState.movies,
-                  isLoading: trendingState.isLoadingInitial,
-                  error: trendingState.error,
+                child: StaggeredReveal(
+                  index: 1,
+                  child: _FeaturedHero(
+                    movies: trendingState.movies,
+                    isLoading: trendingState.isLoadingInitial,
+                    error: trendingState.error,
+                  ),
                 ),
               ),
               SliverToBoxAdapter(
-                child: _CategoryTabs(
-                  activeTab: _activeTab,
-                  onSelected: (next) => setState(() => _activeTab = next),
+                child: StaggeredReveal(
+                  index: 2,
+                  child: _CategoryTabs(
+                    activeTab: _activeTab,
+                    onSelected: (next) => setState(() => _activeTab = next),
+                  ),
                 ),
               ),
-              const SliverToBoxAdapter(child: _GenreScroller()),
-              SliverToBoxAdapter(
-                child: _PagedRowSection(
-                  title: 'Trending Heat',
-                  subtitle: 'What everyone is watching now',
-                  feedType: MovieFeedType.trending,
-                ),
+              const SliverToBoxAdapter(
+                child: StaggeredReveal(index: 3, child: _GenreScroller()),
               ),
               SliverToBoxAdapter(
-                child: _PagedRowSection(
-                  title: 'Now in Theaters',
-                  subtitle: 'Fresh releases worth a night out',
-                  feedType: MovieFeedType.nowPlaying,
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: _PagedRowSection(
-                  title: 'Top Rated Gems',
-                  subtitle: 'Critics and fans can\'t stop talking about these',
-                  feedType: MovieFeedType.topRated,
+                child: StaggeredReveal(
+                  index: 4,
+                  child: _PagedRowSection(
+                    title: 'Trending Heat',
+                    subtitle: 'What everyone is watching now',
+                    feedType: MovieFeedType.trending,
+                  ),
                 ),
               ),
               SliverToBoxAdapter(
-                child: _PagedRowSection(
-                  title: 'Popular Right Now',
-                  subtitle: 'Massive audience favorites',
-                  feedType: MovieFeedType.popular,
+                child: StaggeredReveal(
+                  index: 5,
+                  child: _PagedRowSection(
+                    title: 'Now in Theaters',
+                    subtitle: 'Fresh releases worth a night out',
+                    feedType: MovieFeedType.nowPlaying,
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: StaggeredReveal(
+                  index: 6,
+                  child: _PagedRowSection(
+                    title: 'Top Rated Gems',
+                    subtitle:
+                        'Critics and fans can\'t stop talking about these',
+                    feedType: MovieFeedType.topRated,
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: StaggeredReveal(
+                  index: 7,
+                  child: _PagedRowSection(
+                    title: 'Popular Right Now',
+                    subtitle: 'Massive audience favorites',
+                    feedType: MovieFeedType.popular,
+                  ),
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 115)),
@@ -173,35 +200,88 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               slivers: [
                 SliverToBoxAdapter(
-                  child: _HomeHeader(
-                    title: 'Discover Stories That Stick',
-                    subtitle:
-                        'Curated collections and cinematic picks that feel alive on every screen.',
-                    onSearch: () => context.go('/search'),
-                    isWide: true,
+                  child: StaggeredReveal(
+                    index: 0,
+                    beginOffset: const Offset(0, 0.02),
+                    child: _HomeHeader(
+                      title: 'Discover Stories That Stick',
+                      subtitle:
+                          'Curated collections and cinematic picks that feel alive on every screen.',
+                      onSearch: () => context.go('/search'),
+                      isWide: true,
+                    ),
                   ),
                 ),
                 SliverToBoxAdapter(
-                  child: _WebHeroBand(
-                    trending: trendingState,
-                    nowPlaying: nowPlayingState,
+                  child: StaggeredReveal(
+                    index: 1,
+                    beginOffset: const Offset(0, 0.02),
+                    child: _WebHeroBand(
+                      trending: trendingState,
+                      nowPlaying: nowPlayingState,
+                    ),
                   ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                const SliverToBoxAdapter(child: _WebDownloadStrip()),
+                const SliverToBoxAdapter(
+                  child: StaggeredReveal(index: 2, child: _WebDownloadStrip()),
+                ),
                 const SliverToBoxAdapter(child: SizedBox(height: 18)),
                 SliverToBoxAdapter(
-                  child: _CategoryTabs(
-                    activeTab: _activeTab,
-                    onSelected: (next) => setState(() => _activeTab = next),
-                    isWide: true,
+                  child: StaggeredReveal(
+                    index: 3,
+                    child: _CategoryTabs(
+                      activeTab: _activeTab,
+                      onSelected: (next) => setState(() => _activeTab = next),
+                      isWide: true,
+                    ),
                   ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 8)),
-                const SliverToBoxAdapter(child: _GenreScroller(isWide: true)),
+                const SliverToBoxAdapter(
+                  child: StaggeredReveal(
+                    index: 4,
+                    child: _GenreScroller(isWide: true),
+                  ),
+                ),
                 const SliverToBoxAdapter(child: SizedBox(height: 14)),
                 SliverToBoxAdapter(
-                  child: _buildWebGrid(activeCollection, activeFeedType),
+                  child: FadeSlideIn(
+                    key: ValueKey('web-grid-$_activeTab'),
+                    delay: CineMotion.fast,
+                    beginOffset: const Offset(0, 0.018),
+                    child: AnimatedSwitcher(
+                      duration: CineMotion.resolveDuration(
+                        context,
+                        CineMotion.normal,
+                      ),
+                      switchInCurve: CineMotion.resolveCurve(
+                        context,
+                        Curves.easeOutCubic,
+                      ),
+                      switchOutCurve: CineMotion.resolveCurve(
+                        context,
+                        Curves.easeInCubic,
+                      ),
+                      transitionBuilder: (child, animation) {
+                        final reduceMotion = CineMotion.reduceMotion(context);
+                        final slide = Tween<Offset>(
+                          begin: reduceMotion
+                              ? Offset.zero
+                              : const Offset(0.012, 0),
+                          end: Offset.zero,
+                        ).animate(animation);
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(position: slide, child: child),
+                        );
+                      },
+                      child: KeyedSubtree(
+                        key: ValueKey(activeFeedType.name),
+                        child: _buildWebGrid(activeCollection, activeFeedType),
+                      ),
+                    ),
+                  ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 40)),
               ],
@@ -276,7 +356,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               );
             }
 
-            return _WebPosterCard(movie: visible[index]);
+            final movie = visible[index];
+            return _WebPosterCard(
+              movie: movie,
+              heroTag: 'home-web-${feedType.name}-$index-${movie.id}',
+            );
           },
         );
       },
@@ -395,7 +479,12 @@ class _FeaturedHero extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: GestureDetector(
-        onTap: () => context.push('/movie/${hero.id}'),
+        onTap: () {
+          final heroTag = 'home-featured-${hero.id}';
+          context.push(
+            '/movie/${hero.id}?heroTag=${Uri.encodeComponent(heroTag)}',
+          );
+        },
         child: Container(
           height: 268,
           clipBehavior: Clip.antiAlias,
@@ -414,15 +503,18 @@ class _FeaturedHero extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (hero.backdropUrl != null)
-                CachedNetworkImage(
-                  imageUrl: hero.backdropUrl!,
-                  fit: BoxFit.cover,
-                  memCacheWidth: 1600,
-                  fadeInDuration: const Duration(milliseconds: 140),
-                  placeholder: (context, url) =>
-                      const ColoredBox(color: CinePalette.surface),
-                  errorWidget: (context, url, error) =>
-                      const ColoredBox(color: CinePalette.surface),
+                Hero(
+                  tag: 'home-featured-${hero.id}',
+                  child: CachedNetworkImage(
+                    imageUrl: hero.backdropUrl!,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 1600,
+                    fadeInDuration: const Duration(milliseconds: 140),
+                    placeholder: (context, url) =>
+                        const ColoredBox(color: CinePalette.surface),
+                    errorWidget: (context, url, error) =>
+                        const ColoredBox(color: CinePalette.surface),
+                  ),
                 )
               else
                 const ColoredBox(color: CinePalette.surface),
@@ -862,7 +954,11 @@ class _HomeGenreMoviesScreen extends ConsumerWidget {
                 );
               }
 
-              return MovieCard(movie: collection.movies[index]);
+              final movie = collection.movies[index];
+              return MovieCard(
+                movie: movie,
+                heroTag: 'home-genre-${genre.id}-$index-${movie.id}',
+              );
             },
           ),
         );
@@ -975,7 +1071,11 @@ class _PagedRowSection extends ConsumerWidget {
             );
           }
 
-          return MovieCardNetflix(movie: visible[index]);
+          final movie = visible[index];
+          return MovieCardNetflix(
+            movie: movie,
+            heroTag: 'home-${feedType.name}-$index-${movie.id}',
+          );
         },
       ),
     );
@@ -1035,12 +1135,24 @@ class _WebHeroBand extends StatelessWidget {
                   )
                 else
                   Column(
-                    children: nowPlaying.movies.take(4).map((movie) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _MiniMovieRow(movie: movie),
-                      );
-                    }).toList(),
+                    children: nowPlaying.movies
+                        .take(4)
+                        .toList()
+                        .asMap()
+                        .entries
+                        .map((entry) {
+                          final index = entry.key;
+                          final movie = entry.value;
+                          final heroTag = 'home-nowplaying-$index-${movie.id}';
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _MiniMovieRow(
+                              movie: movie,
+                              heroTag: heroTag,
+                            ),
+                          );
+                        })
+                        .toList(),
                   ),
               ],
             ),
@@ -1105,13 +1217,19 @@ class _WebDownloadStrip extends StatelessWidget {
 
 class _MiniMovieRow extends StatelessWidget {
   final Movie movie;
+  final String? heroTag;
 
-  const _MiniMovieRow({required this.movie});
+  const _MiniMovieRow({required this.movie, this.heroTag});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push('/movie/${movie.id}'),
+      onTap: () {
+        final route = (heroTag == null || heroTag!.isEmpty)
+            ? '/movie/${movie.id}'
+            : '/movie/${movie.id}?heroTag=${Uri.encodeComponent(heroTag!)}';
+        context.push(route);
+      },
       child: Container(
         decoration: BoxDecoration(
           color: CinePalette.surface.withAlpha(160),
@@ -1130,15 +1248,21 @@ class _MiniMovieRow extends StatelessWidget {
                 height: 92,
                 child: movie.posterUrl == null
                     ? const ColoredBox(color: CinePalette.backgroundSoft)
-                    : CachedNetworkImage(
-                        imageUrl: movie.posterUrl!,
-                        fit: BoxFit.cover,
-                        memCacheWidth: 220,
-                        fadeInDuration: const Duration(milliseconds: 120),
-                        placeholder: (context, url) =>
-                            const ColoredBox(color: CinePalette.backgroundSoft),
-                        errorWidget: (context, url, error) =>
-                            const ColoredBox(color: CinePalette.backgroundSoft),
+                    : Hero(
+                        tag: heroTag ?? 'home-mini-${movie.id}',
+                        child: CachedNetworkImage(
+                          imageUrl: movie.posterUrl!,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 220,
+                          fadeInDuration: const Duration(milliseconds: 120),
+                          placeholder: (context, url) => const ColoredBox(
+                            color: CinePalette.backgroundSoft,
+                          ),
+                          errorWidget: (context, url, error) =>
+                              const ColoredBox(
+                                color: CinePalette.backgroundSoft,
+                              ),
+                        ),
                       ),
               ),
             ),
@@ -1202,8 +1326,9 @@ class _MiniMovieRow extends StatelessWidget {
 
 class _WebPosterCard extends StatefulWidget {
   final Movie movie;
+  final String? heroTag;
 
-  const _WebPosterCard({required this.movie});
+  const _WebPosterCard({required this.movie, this.heroTag});
 
   @override
   State<_WebPosterCard> createState() => _WebPosterCardState();
@@ -1218,7 +1343,12 @@ class _WebPosterCardState extends State<_WebPosterCard> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () => context.push('/movie/${widget.movie.id}'),
+        onTap: () {
+          final route = (widget.heroTag == null || widget.heroTag!.isEmpty)
+              ? '/movie/${widget.movie.id}'
+              : '/movie/${widget.movie.id}?heroTag=${Uri.encodeComponent(widget.heroTag!)}';
+          context.push(route);
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 190),
           transform: Matrix4.translationValues(0, _hovered ? -6.0 : 0, 0),
@@ -1241,15 +1371,18 @@ class _WebPosterCardState extends State<_WebPosterCard> {
               fit: StackFit.expand,
               children: [
                 if (widget.movie.posterUrl != null)
-                  CachedNetworkImage(
-                    imageUrl: widget.movie.posterUrl!,
-                    fit: BoxFit.cover,
-                    memCacheWidth: 420,
-                    fadeInDuration: const Duration(milliseconds: 120),
-                    placeholder: (context, url) =>
-                        const ColoredBox(color: CinePalette.surface),
-                    errorWidget: (context, url, error) =>
-                        const ColoredBox(color: CinePalette.surface),
+                  Hero(
+                    tag: widget.heroTag ?? 'home-web-${widget.movie.id}',
+                    child: CachedNetworkImage(
+                      imageUrl: widget.movie.posterUrl!,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 420,
+                      fadeInDuration: const Duration(milliseconds: 120),
+                      placeholder: (context, url) =>
+                          const ColoredBox(color: CinePalette.surface),
+                      errorWidget: (context, url, error) =>
+                          const ColoredBox(color: CinePalette.surface),
+                    ),
                   )
                 else
                   const ColoredBox(color: CinePalette.surface),

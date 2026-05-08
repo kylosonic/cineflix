@@ -10,18 +10,24 @@ import '../../providers/auth_providers.dart';
 import '../../providers/movie_providers.dart';
 import '../../theme/cine_theme.dart';
 import '../../widgets/movie_card.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 class MovieDetailScreen extends ConsumerWidget {
   final int movieId;
+  final String? heroTag;
 
-  const MovieDetailScreen({super.key, required this.movieId});
+  const MovieDetailScreen({super.key, required this.movieId, this.heroTag});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detailAsync = ref.watch(movieDetailProvider(movieId));
 
     return detailAsync.when(
-      data: (detail) => _MovieDetailContent(movieId: movieId, detail: detail),
+      data: (detail) => _MovieDetailContent(
+        movieId: movieId,
+        detail: detail,
+        heroTag: heroTag,
+      ),
       loading: () => const _DetailStateScaffold(
         icon: Icons.hourglass_top_rounded,
         title: 'Loading movie details',
@@ -40,8 +46,13 @@ class MovieDetailScreen extends ConsumerWidget {
 class _MovieDetailContent extends ConsumerWidget {
   final int movieId;
   final MovieDetail detail;
+  final String? heroTag;
 
-  const _MovieDetailContent({required this.movieId, required this.detail});
+  const _MovieDetailContent({
+    required this.movieId,
+    required this.detail,
+    required this.heroTag,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -78,17 +89,10 @@ class _MovieDetailContent extends ConsumerWidget {
                 background: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (detail.backdropUrl != null)
-                      CachedNetworkImage(
-                        imageUrl: detail.backdropUrl!,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) =>
-                            const ColoredBox(color: CinePalette.surface),
-                        errorWidget: (context, url, error) =>
-                            const ColoredBox(color: CinePalette.surface),
-                      )
-                    else
-                      const ColoredBox(color: CinePalette.surface),
+                    _BackdropHeroImage(
+                      backdropUrl: detail.backdropUrl,
+                      heroTag: heroTag,
+                    ),
                     DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -151,69 +155,86 @@ class _MovieDetailContent extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (detail.tagline?.trim().isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          '"${detail.tagline!.trim()}"',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontStyle: FontStyle.italic,
-                            color: CinePalette.textMuted,
+                      StaggeredReveal(
+                        index: 0,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            '"${detail.tagline!.trim()}"',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontStyle: FontStyle.italic,
+                              color: CinePalette.textMuted,
+                            ),
                           ),
                         ),
                       ),
-                    _SectionCard(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _InfoPill(
-                            icon: Icons.timer_outlined,
-                            label: detail.runtime != null
-                                ? '${detail.runtime} min'
-                                : 'Runtime unknown',
-                          ),
-                          _InfoPill(
-                            icon: Icons.how_to_vote_rounded,
-                            label: '${detail.voteCount} votes',
-                          ),
-                          if (detail.status?.trim().isNotEmpty == true)
+                    StaggeredReveal(
+                      index: 1,
+                      child: _SectionCard(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
                             _InfoPill(
-                              icon: Icons.verified_rounded,
-                              label: detail.status!,
+                              icon: Icons.timer_outlined,
+                              label: detail.runtime != null
+                                  ? '${detail.runtime} min'
+                                  : 'Runtime unknown',
                             ),
-                        ],
+                            _InfoPill(
+                              icon: Icons.how_to_vote_rounded,
+                              label: '${detail.voteCount} votes',
+                            ),
+                            if (detail.status?.trim().isNotEmpty == true)
+                              _InfoPill(
+                                icon: Icons.verified_rounded,
+                                label: detail.status!,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _SectionCard(
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          if (trailer != null)
-                            _ActionButton(
-                              icon: Icons.play_arrow_rounded,
-                              label: 'Watch Trailer',
-                              onTap: () => _showTrailer(context, trailer.key),
-                            ),
-                          _WatchlistButton(movieId: movieId, detail: detail),
-                          _RateButton(movieId: movieId),
-                        ],
+                    StaggeredReveal(
+                      index: 2,
+                      child: _SectionCard(
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            if (trailer != null)
+                              _ActionButton(
+                                icon: Icons.play_arrow_rounded,
+                                label: 'Watch Trailer',
+                                onTap: () => _showTrailer(context, trailer.key),
+                              ),
+                            _WatchlistButton(movieId: movieId, detail: detail),
+                            _RateButton(movieId: movieId),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),
-                    const _SectionTitle(title: 'Overview'),
-                    _SectionCard(
-                      child: Text(
-                        detail.overview.trim().isEmpty
-                            ? 'No overview available for this title.'
-                            : detail.overview,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.55,
-                          color: CinePalette.textMuted,
-                        ),
+                    StaggeredReveal(
+                      index: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _SectionTitle(title: 'Overview'),
+                          _SectionCard(
+                            child: Text(
+                              detail.overview.trim().isEmpty
+                                  ? 'No overview available for this title.'
+                                  : detail.overview,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                height: 1.55,
+                                color: CinePalette.textMuted,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -321,6 +342,34 @@ class _MovieDetailContent extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+class _BackdropHeroImage extends StatelessWidget {
+  final String? backdropUrl;
+  final String? heroTag;
+
+  const _BackdropHeroImage({required this.backdropUrl, required this.heroTag});
+
+  @override
+  Widget build(BuildContext context) {
+    final image = backdropUrl != null
+        ? CachedNetworkImage(
+            imageUrl: backdropUrl!,
+            fit: BoxFit.cover,
+            placeholder: (context, url) =>
+                const ColoredBox(color: CinePalette.surface),
+            errorWidget: (context, url, error) =>
+                const ColoredBox(color: CinePalette.surface),
+          )
+        : const ColoredBox(color: CinePalette.surface);
+
+    final normalizedTag = heroTag?.trim();
+    if (normalizedTag == null || normalizedTag.isEmpty) {
+      return image;
+    }
+
+    return Hero(tag: normalizedTag, child: image);
   }
 }
 

@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'motion_tokens.dart';
+
 class CinePalette {
   const CinePalette._();
 
@@ -240,7 +242,7 @@ class CineGlassPanel extends StatelessWidget {
   }
 }
 
-class _Aura extends StatelessWidget {
+class _Aura extends StatefulWidget {
   final Alignment alignment;
   final Color color;
   final double size;
@@ -252,21 +254,68 @@ class _Aura extends StatelessWidget {
   });
 
   @override
+  State<_Aura> createState() => _AuraState();
+}
+
+class _AuraState extends State<_Aura> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final dynamicDuration = Duration(
+      milliseconds: 5600 + (widget.size / 2).round(),
+    );
+    _controller = AnimationController(vsync: this, duration: dynamicDuration)
+      ..repeat(reverse: true);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: alignment,
-      child: IgnorePointer(
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [color.withAlpha(70), color.withAlpha(0)],
-            ),
-          ),
+    final baseAura = Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [widget.color.withAlpha(70), widget.color.withAlpha(0)],
         ),
       ),
     );
+
+    if (CineMotion.reduceMotion(context)) {
+      return Align(
+        alignment: widget.alignment,
+        child: IgnorePointer(child: baseAura),
+      );
+    }
+
+    return Align(
+      alignment: widget.alignment,
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final curved = CurvedAnimation(
+              parent: _controller,
+              curve: Curves.easeInOutSine,
+            ).value;
+            final scale = 0.94 + (0.12 * curved);
+            final opacity = 0.72 + (0.22 * curved);
+            return Opacity(
+              opacity: opacity,
+              child: Transform.scale(scale: scale, child: child),
+            );
+          },
+          child: baseAura,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }

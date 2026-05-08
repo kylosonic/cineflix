@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/auth_providers.dart';
 import '../../theme/cine_theme.dart';
+import '../../theme/motion_tokens.dart';
+import '../../widgets/motion/fade_slide_in.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -53,40 +56,50 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: isWide
                       ? Row(
                           children: [
-                            Expanded(child: _AuthIntro(isLogin: _isLogin)),
+                            Expanded(
+                              child: StaggeredReveal(
+                                index: 0,
+                                child: _AuthIntro(isLogin: _isLogin),
+                              ),
+                            ),
                             const SizedBox(width: 14),
                             Expanded(
-                              child: _AuthFormCard(
-                                emailController: _emailController,
-                                passwordController: _passwordController,
-                                isLogin: _isLogin,
-                                obscurePassword: _obscurePassword,
-                                isLoading: authState.isLoading,
-                                error: authState.error,
-                                onTogglePassword: () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
+                              child: StaggeredReveal(
+                                index: 1,
+                                child: _AuthFormCard(
+                                  emailController: _emailController,
+                                  passwordController: _passwordController,
+                                  isLogin: _isLogin,
+                                  obscurePassword: _obscurePassword,
+                                  isLoading: authState.isLoading,
+                                  error: authState.error,
+                                  onTogglePassword: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
+                                  onToggleMode: () =>
+                                      setState(() => _isLogin = !_isLogin),
+                                  onSubmit: _handleSubmit,
                                 ),
-                                onToggleMode: () =>
-                                    setState(() => _isLogin = !_isLogin),
-                                onSubmit: _handleSubmit,
                               ),
                             ),
                           ],
                         )
-                      : _AuthFormCard(
-                          emailController: _emailController,
-                          passwordController: _passwordController,
-                          isLogin: _isLogin,
-                          obscurePassword: _obscurePassword,
-                          isLoading: authState.isLoading,
-                          error: authState.error,
-                          onTogglePassword: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
+                      : FadeSlideIn(
+                          child: _AuthFormCard(
+                            emailController: _emailController,
+                            passwordController: _passwordController,
+                            isLogin: _isLogin,
+                            obscurePassword: _obscurePassword,
+                            isLoading: authState.isLoading,
+                            error: authState.error,
+                            onTogglePassword: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
+                            onToggleMode: () =>
+                                setState(() => _isLogin = !_isLogin),
+                            onSubmit: _handleSubmit,
+                            showIntro: true,
                           ),
-                          onToggleMode: () =>
-                              setState(() => _isLogin = !_isLogin),
-                          onSubmit: _handleSubmit,
-                          showIntro: true,
                         ),
                 );
               },
@@ -149,97 +162,106 @@ class _SignedInProfile extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           children: [
-            Text('Profile', style: Theme.of(context).textTheme.headlineLarge),
+            const StaggeredReveal(index: 0, child: _ProfileTitle()),
             const SizedBox(height: 10),
-            CineGlassPanel(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 66,
-                    height: 66,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [
-                          CinePalette.accent.withAlpha(240),
-                          CinePalette.accentAlt.withAlpha(220),
+            StaggeredReveal(
+              index: 1,
+              child: CineGlassPanel(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 66,
+                      height: 66,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            CinePalette.accent.withAlpha(240),
+                            CinePalette.accentAlt.withAlpha(220),
+                          ],
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          initials,
+                          style: const TextStyle(
+                            color: Color(0xFF251900),
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            userEmail,
+                            style: const TextStyle(
+                              color: CinePalette.textPrimary,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Member since $joinedDate',
+                            style: const TextStyle(
+                              color: CinePalette.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    child: Center(
-                      child: Text(
-                        initials,
-                        style: const TextStyle(
-                          color: Color(0xFF251900),
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          userEmail,
-                          style: const TextStyle(
-                            color: CinePalette.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Member since $joinedDate',
-                          style: const TextStyle(
-                            color: CinePalette.textMuted,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
-            CineGlassPanel(
-              borderRadius: BorderRadius.circular(16),
-              child: Column(
-                children: [
-                  _ProfileActionTile(
-                    icon: Icons.bookmark_rounded,
-                    title: 'Open My Lists',
-                    subtitle: 'View saved titles, favorites, and ratings.',
-                    onTap: () => context.go('/watchlist'),
-                  ),
-                  const Divider(height: 14),
-                  _ProfileActionTile(
-                    icon: Icons.search_rounded,
-                    title: 'Find Something New',
-                    subtitle: 'Search by title, mood, or genre.',
-                    onTap: () => context.go('/search'),
-                  ),
-                ],
+            StaggeredReveal(
+              index: 2,
+              child: CineGlassPanel(
+                borderRadius: BorderRadius.circular(16),
+                child: Column(
+                  children: [
+                    _ProfileActionTile(
+                      icon: Icons.bookmark_rounded,
+                      title: 'Open My Lists',
+                      subtitle: 'View saved titles, favorites, and ratings.',
+                      onTap: () => context.go('/watchlist'),
+                    ),
+                    const Divider(height: 14),
+                    _ProfileActionTile(
+                      icon: Icons.search_rounded,
+                      title: 'Find Something New',
+                      subtitle: 'Search by title, mood, or genre.',
+                      onTap: () => context.go('/search'),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: isLoading ? null : onSignOut,
-              icon: isLoading
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.logout_rounded),
-              label: const Text('Sign Out'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFFFA8A8),
-                side: const BorderSide(color: Color(0xFFFF8D8D)),
+            StaggeredReveal(
+              index: 3,
+              child: OutlinedButton.icon(
+                onPressed: isLoading ? null : onSignOut,
+                icon: isLoading
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.logout_rounded),
+                label: const Text('Sign Out'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFFA8A8),
+                  side: const BorderSide(color: Color(0xFFFF8D8D)),
+                ),
               ),
             ),
           ],
@@ -330,16 +352,30 @@ class _AuthFormCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          Text(
-            isLogin ? 'Welcome back' : 'Create account',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isLogin
-                ? 'Sign in to sync your lists and ratings.'
-                : 'Start building your personal watch universe.',
-            style: const TextStyle(color: CinePalette.textMuted),
+          AnimatedSwitcher(
+            duration: CineMotion.resolveDuration(context, CineMotion.normal),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            child: Column(
+              key: ValueKey('auth-mode-${isLogin ? 'login' : 'signup'}'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isLogin ? 'Welcome back' : 'Create account',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isLogin
+                      ? 'Sign in to sync your lists and ratings.'
+                      : 'Start building your personal watch universe.',
+                  style: const TextStyle(color: CinePalette.textMuted),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -388,18 +424,35 @@ class _AuthFormCard extends StatelessWidget {
                   : 'Already have an account? Sign In',
             ),
           ),
-          if (error != null && error!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                error!,
-                style: const TextStyle(color: Color(0xFFFFB0B0), fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-            ),
+          AnimatedSwitcher(
+            duration: CineMotion.resolveDuration(context, CineMotion.fast),
+            child: (error != null && error!.trim().isNotEmpty)
+                ? Padding(
+                    key: ValueKey('auth-error-$error'),
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      error!,
+                      style: const TextStyle(
+                        color: Color(0xFFFFB0B0),
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : const SizedBox.shrink(key: ValueKey('auth-error-none')),
+          ),
         ],
       ),
     );
+  }
+}
+
+class _ProfileTitle extends StatelessWidget {
+  const _ProfileTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('Profile', style: Theme.of(context).textTheme.headlineLarge);
   }
 }
 

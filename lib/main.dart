@@ -15,6 +15,38 @@ import 'screens/watchlist/watchlist_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/supabase_service.dart';
 import 'theme/cine_theme.dart';
+import 'theme/motion_tokens.dart';
+import 'widgets/motion/pressable_scale.dart';
+
+CustomTransitionPage<void> _buildShellTransitionPage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: CineMotion.medium,
+    reverseTransitionDuration: CineMotion.normal,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final reduceMotion = CineMotion.reduceMotion(context);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+
+      final slide = Tween<Offset>(
+        begin: reduceMotion ? Offset.zero : const Offset(0.015, 0),
+        end: Offset.zero,
+      ).animate(curved);
+
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(position: slide, child: child),
+      );
+    },
+  );
+}
 
 final _routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -25,23 +57,31 @@ final _routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: HomeScreen()),
+            pageBuilder: (context, state) => _buildShellTransitionPage(
+              state: state,
+              child: const HomeScreen(),
+            ),
           ),
           GoRoute(
             path: '/search',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: SearchScreen()),
+            pageBuilder: (context, state) => _buildShellTransitionPage(
+              state: state,
+              child: const SearchScreen(),
+            ),
           ),
           GoRoute(
             path: '/watchlist',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: WatchlistScreen()),
+            pageBuilder: (context, state) => _buildShellTransitionPage(
+              state: state,
+              child: const WatchlistScreen(),
+            ),
           ),
           GoRoute(
             path: '/profile',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: ProfileScreen()),
+            pageBuilder: (context, state) => _buildShellTransitionPage(
+              state: state,
+              child: const ProfileScreen(),
+            ),
           ),
         ],
       ),
@@ -49,12 +89,38 @@ final _routerProvider = Provider<GoRouter>((ref) {
         path: '/movie/:movieId',
         pageBuilder: (context, state) {
           final movieId = int.parse(state.pathParameters['movieId']!);
+          final heroTag = state.uri.queryParameters['heroTag'];
           return CustomTransitionPage(
             key: state.pageKey,
-            child: MovieDetailScreen(movieId: movieId),
+            transitionDuration: CineMotion.slow,
+            reverseTransitionDuration: CineMotion.medium,
+            child: MovieDetailScreen(movieId: movieId, heroTag: heroTag),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
+                  final reduceMotion = CineMotion.reduceMotion(context);
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+
+                  final slide = Tween<Offset>(
+                    begin: reduceMotion ? Offset.zero : const Offset(0, 0.035),
+                    end: Offset.zero,
+                  ).animate(curved);
+
+                  final scale = Tween<double>(
+                    begin: reduceMotion ? 1.0 : 0.985,
+                    end: 1.0,
+                  ).animate(curved);
+
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: slide,
+                      child: ScaleTransition(scale: scale, child: child),
+                    ),
+                  );
                 },
           );
         },
@@ -191,9 +257,10 @@ class _MobileNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return PressableScale(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      hoveredScale: 1,
+      pressedScale: 0.965,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 230),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -432,8 +499,10 @@ class _SidebarItemState extends State<_SidebarItem> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
+      child: PressableScale(
         onTap: widget.onTap,
+        hoveredScale: 1.01,
+        pressedScale: 0.97,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),

@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/movie_providers.dart';
 import '../../theme/cine_theme.dart';
+import '../../widgets/loading/movie_grid_skeleton.dart';
+import '../../widgets/motion/fade_slide_in.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 class WatchlistScreen extends ConsumerWidget {
   const WatchlistScreen({super.key});
@@ -22,37 +25,39 @@ class WatchlistScreen extends ConsumerWidget {
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: CineGlassPanel(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.lock_outline_rounded,
-                      size: 56,
-                      color: CinePalette.accent,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Sign in to unlock your lists',
-                      style: Theme.of(context).textTheme.titleLarge,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Track favorites, save watchlist picks, and keep your ratings in one place.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: CinePalette.textMuted,
-                        height: 1.45,
+              child: FadeSlideIn(
+                child: CineGlassPanel(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.lock_outline_rounded,
+                        size: 56,
+                        color: CinePalette.accent,
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    ElevatedButton.icon(
-                      onPressed: () => context.go('/profile'),
-                      icon: const Icon(Icons.login_rounded),
-                      label: const Text('Go to Sign In'),
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+                      Text(
+                        'Sign in to unlock your lists',
+                        style: Theme.of(context).textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Track favorites, save watchlist picks, and keep your ratings in one place.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: CinePalette.textMuted,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      ElevatedButton.icon(
+                        onPressed: () => context.go('/profile'),
+                        icon: const Icon(Icons.login_rounded),
+                        label: const Text('Go to Sign In'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -69,82 +74,96 @@ class WatchlistScreen extends ConsumerWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'My Lists',
-                      style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Everything you saved, loved, and rated.',
-                      style: TextStyle(color: CinePalette.textMuted),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatTile(
-                            label: 'Watchlist',
-                            value: watchlistState.movies.length,
-                            icon: Icons.bookmark_rounded,
+                child: StaggeredReveal(
+                  index: 0,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'My Lists',
+                        style: Theme.of(context).textTheme.headlineLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Everything you saved, loved, and rated.',
+                        style: TextStyle(color: CinePalette.textMuted),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _StatTile(
+                              label: 'Watchlist',
+                              value: watchlistState.movies.length,
+                              icon: Icons.bookmark_rounded,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _StatTile(
-                            label: 'Favorites',
-                            value: favoritesState.movies.length,
-                            icon: Icons.favorite_rounded,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _StatTile(
+                              label: 'Favorites',
+                              value: favoritesState.movies.length,
+                              icon: Icons.favorite_rounded,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _StatTile(
-                            label: 'Rated',
-                            value: ratingsState.ratings.length,
-                            icon: Icons.star_rounded,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _StatTile(
+                              label: 'Rated',
+                              value: ratingsState.ratings.length,
+                              icon: Icons.star_rounded,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    CineGlassPanel(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      borderRadius: BorderRadius.circular(14),
-                      child: const TabBar(
-                        tabs: [
-                          Tab(text: 'Watchlist'),
-                          Tab(text: 'Rated'),
-                          Tab(text: 'Favorites'),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      CineGlassPanel(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        borderRadius: BorderRadius.circular(14),
+                        child: const TabBar(
+                          tabs: [
+                            Tab(text: 'Watchlist'),
+                            Tab(text: 'Rated'),
+                            Tab(text: 'Favorites'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Expanded(
                 child: TabBarView(
                   children: [
-                    _MovieCollectionGrid(
-                      rows: watchlistState.movies,
-                      isLoading: watchlistState.isLoading,
-                      emptyTitle: 'Your watchlist is empty',
-                      emptySubtitle:
-                          'Add titles from Home or Detail to plan your next movie night.',
+                    FadeSlideIn(
+                      key: const ValueKey('watchlist-tab-watchlist'),
+                      child: _MovieCollectionGrid(
+                        rows: watchlistState.movies,
+                        isLoading: watchlistState.isLoading,
+                        heroPrefix: 'watchlist-saved',
+                        emptyTitle: 'Your watchlist is empty',
+                        emptySubtitle:
+                            'Add titles from Home or Detail to plan your next movie night.',
+                      ),
                     ),
-                    _RatedMoviesList(
-                      ratingsMap: ratingsState.ratings,
-                      ratedRows: ratingsState.ratedMovies,
-                      isLoading: ratingsState.isLoading,
+                    FadeSlideIn(
+                      key: const ValueKey('watchlist-tab-rated'),
+                      child: _RatedMoviesList(
+                        ratingsMap: ratingsState.ratings,
+                        ratedRows: ratingsState.ratedMovies,
+                        isLoading: ratingsState.isLoading,
+                      ),
                     ),
-                    _MovieCollectionGrid(
-                      rows: favoritesState.movies,
-                      isLoading: favoritesState.isLoading,
-                      emptyTitle: 'No favorites yet',
-                      emptySubtitle:
-                          'Tap the heart-worthy titles and keep them close.',
+                    FadeSlideIn(
+                      key: const ValueKey('watchlist-tab-favorites'),
+                      child: _MovieCollectionGrid(
+                        rows: favoritesState.movies,
+                        isLoading: favoritesState.isLoading,
+                        heroPrefix: 'watchlist-favorites',
+                        emptyTitle: 'No favorites yet',
+                        emptySubtitle:
+                            'Tap the heart-worthy titles and keep them close.',
+                      ),
                     ),
                   ],
                 ),
@@ -208,12 +227,14 @@ class _StatTile extends StatelessWidget {
 class _MovieCollectionGrid extends StatelessWidget {
   final List<Map<String, dynamic>> rows;
   final bool isLoading;
+  final String heroPrefix;
   final String emptyTitle;
   final String emptySubtitle;
 
   const _MovieCollectionGrid({
     required this.rows,
     required this.isLoading,
+    required this.heroPrefix,
     required this.emptyTitle,
     required this.emptySubtitle,
   });
@@ -221,7 +242,7 @@ class _MovieCollectionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const MovieGridSkeleton(itemCount: 10);
     }
 
     if (rows.isEmpty) {
@@ -251,7 +272,10 @@ class _MovieCollectionGrid extends StatelessWidget {
           ),
           itemCount: rows.length,
           itemBuilder: (context, index) {
-            return _StoredMovieCard(row: rows[index]);
+            return _StoredMovieCard(
+              row: rows[index],
+              heroTag: '$heroPrefix-$index',
+            );
           },
         );
       },
@@ -261,8 +285,9 @@ class _MovieCollectionGrid extends StatelessWidget {
 
 class _StoredMovieCard extends StatelessWidget {
   final Map<String, dynamic> row;
+  final String heroTag;
 
-  const _StoredMovieCard({required this.row});
+  const _StoredMovieCard({required this.row, required this.heroTag});
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +305,11 @@ class _StoredMovieCard extends StatelessWidget {
         0;
 
     return GestureDetector(
-      onTap: movieId > 0 ? () => context.push('/movie/$movieId') : null,
+      onTap: movieId > 0
+          ? () => context.push(
+              '/movie/$movieId?heroTag=${Uri.encodeComponent('$heroTag-$movieId')}',
+            )
+          : null,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
@@ -297,11 +326,14 @@ class _StoredMovieCard extends StatelessWidget {
                   width: double.infinity,
                   child: posterPath == null
                       ? const ColoredBox(color: CinePalette.surfaceAlt)
-                      : Image.network(
-                          _posterUrl(posterPath),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, url, error) =>
-                              const ColoredBox(color: CinePalette.surfaceAlt),
+                      : Hero(
+                          tag: '$heroTag-$movieId',
+                          child: Image.network(
+                            _posterUrl(posterPath),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, url, error) =>
+                                const ColoredBox(color: CinePalette.surfaceAlt),
+                          ),
                         ),
                 ),
               ),
@@ -386,7 +418,7 @@ class _RatedMoviesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const _RatedListSkeleton();
     }
 
     if (ratingsMap.isEmpty && ratedRows.isEmpty) {
@@ -489,37 +521,80 @@ class _ListEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: CineGlassPanel(
+    return FadeSlideIn(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: CineGlassPanel(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.movie_filter_outlined,
+                  size: 42,
+                  color: CinePalette.accent,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: CinePalette.textMuted,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RatedListSkeleton extends StatelessWidget {
+  const _RatedListSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+      itemBuilder: (context, index) {
+        return CineGlassPanel(
+          borderRadius: BorderRadius.circular(14),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.movie_filter_outlined,
-                size: 42,
-                color: CinePalette.accent,
+              Container(
+                height: 14,
+                width: 120,
+                decoration: BoxDecoration(
+                  color: CinePalette.surfaceAlt.withAlpha(180),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
               const SizedBox(height: 10),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: CinePalette.textMuted,
-                  height: 1.45,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: 0.5,
+                  minHeight: 7,
+                  color: CinePalette.accent.withAlpha(210),
+                  backgroundColor: CinePalette.surfaceAlt.withAlpha(170),
                 ),
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemCount: 6,
     );
   }
 }
