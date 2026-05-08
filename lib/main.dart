@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -176,124 +177,550 @@ class AppShell extends StatelessWidget {
 }
 
 // ── Mobile Shell ──
-class _MobileShell extends StatelessWidget {
+class _MobileShell extends StatefulWidget {
   final Widget child;
   const _MobileShell({required this.child});
+
+  @override
+  State<_MobileShell> createState() => _MobileShellState();
+}
+
+class _MobileShellState extends State<_MobileShell> {
+  final GlobalKey _contentRepaintKey = GlobalKey();
+  final Set<Timer> _pendingSampleTimers = <Timer>{};
+  Timer? _dockTintPollingTimer;
+  bool _isSamplingTint = false;
+  bool _pendingResample = false;
+  String? _lastObservedPath;
+  Color _adaptiveDockTint = CinePalette.accent;
+
+  static const List<_MobileNavDestination> _destinations = [
+    _MobileNavDestination(icon: Icons.home_rounded, label: 'Home', path: '/'),
+    _MobileNavDestination(
+      icon: Icons.search_rounded,
+      label: 'Search',
+      path: '/search',
+    ),
+    _MobileNavDestination(
+      icon: Icons.bookmark_rounded,
+      label: 'Saved',
+      path: '/watchlist',
+    ),
+    _MobileNavDestination(
+      icon: Icons.person_rounded,
+      label: 'Profile',
+      path: '/profile',
+    ),
+  ];
+
+  int _resolveCurrentIndex(String path) {
+    if (path == '/') return 0;
+    if (path.startsWith('/search')) return 1;
+    if (path.startsWith('/watchlist')) return 2;
+    if (path.startsWith('/profile')) return 3;
+    return 0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _dockTintPollingTimer = Timer.periodic(
+      const Duration(milliseconds: 1400),
+      (_) => _scheduleDockTintSample(),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduleDockTintSample();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.child != widget.child) {
+      _scheduleDockTintSample(delay: const Duration(milliseconds: 140));
+    }
+  }
+
+  @override
+  void dispose() {
+    _dockTintPollingTimer?.cancel();
+    for (final timer in _pendingSampleTimers) {
+      timer.cancel();
+    }
+    _pendingSampleTimers.clear();
+    super.dispose();
+  }
+
+  void _scheduleDockTintSample({Duration delay = Duration.zero}) {
+    if (!mounted) return;
+
+    void runSample() {
+      if (!mounted) return;
+      unawaited(_sampleDockTintFromContent());
+    }
+
+    if (delay == Duration.zero) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        runSample();
+      });
+      return;
+    }
+
+    late final Timer timer;
+    timer = Timer(delay, () {
+      _pendingSampleTimers.remove(timer);
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        runSample();
+      });
+    });
+    _pendingSampleTimers.add(timer);
+  }
+
+  Future<void> _sampleDockTintFromContent() async {
+    if (_isSamplingTint) {
+      _pendingResample = true;
+      return;
+    }
+
+    final renderObject = _contentRepaintKey.currentContext?.findRenderObject();
+    final boundary = renderObject is RenderRepaintBoundary
+        ? renderObject
+        : null;
+
+    if (boundary == null || boundary.debugNeedsPaint) return;
+
+    _isSamplingTint = true;
+    try {
+      final image = await boundary.toImage(pixelRatio: 0.09);
+      final byteData = await image.toByteData(format: ImageByteFormat.rawRgba);
+      final width = image.width;
+      final height = image.height;
+      image.dispose();
+
+      if (byteData == null || width <= 2 || height <= 2) {
+        return;
+      }
+
+      final bytes = byteData.buffer.asUint8List();
+      final xStart = (width * 0.12).round().clamp(0, width - 1);
+      final xEnd = (width * 0.88).round().clamp(1, width);
+      final yStart = (height * 0.67).round().clamp(0, height - 1);
+      final yEnd = (height * 0.96).round().clamp(1, height);
+
+      double red = 0;
+      double green = 0;
+      double blue = 0;
+      double weightSum = 0;
+
+      // Sample a low-res strip where the dock overlays content and build a weighted average.
+      for (var y = yStart; y < yEnd; y += 2) {
+        for (var x = xStart; x < xEnd; x += 2) {
+          final index = ((y * width) + x) * 4;
+          final r = bytes[index];
+          final g = bytes[index + 1];
+          final b = bytes[index + 2];
+          final a = bytes[index + 3];
+
+          if (a < 28) continue;
+
+          final luminance = ((0.2126 * r) + (0.7152 * g) + (0.0722 * b)) / 255;
+          final weight = (1 - (luminance - 0.48).abs()).clamp(0.25, 1.0);
+
+          red += r * weight;
+          green += g * weight;
+          blue += b * weight;
+          weightSum += weight;
+        }
+      }
+
+      if (weightSum <= 0.1) return;
+
+      int toByte(double value) => value.round().clamp(0, 255).toInt();
+
+      final sampled = Color.fromARGB(
+        255,
+        toByte(red / weightSum),
+        toByte(green / weightSum),
+        toByte(blue / weightSum),
+      );
+
+      final hsl = HSLColor.fromColor(sampled);
+      final tuned = hsl
+          .withSaturation((hsl.saturation * 1.18).clamp(0.24, 0.76))
+          .withLightness((hsl.lightness * 0.84).clamp(0.24, 0.56))
+          .toColor();
+
+      final cinematicTint =
+          Color.lerp(const Color(0xFF1B1208), tuned, 0.86) ?? tuned;
+
+      if (!mounted ||
+          cinematicTint.toARGB32() == _adaptiveDockTint.toARGB32()) {
+        return;
+      }
+
+      setState(() {
+        _adaptiveDockTint = cinematicTint;
+      });
+    } catch (_) {
+      // Fail silently to avoid disrupting navigation if sampling is unavailable.
+    } finally {
+      _isSamplingTint = false;
+      if (_pendingResample) {
+        _pendingResample = false;
+        _scheduleDockTintSample(delay: const Duration(milliseconds: 90));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentPath = GoRouterState.of(context).uri.path;
+    final currentIndex = _resolveCurrentIndex(currentPath);
+    final routeChanged = _lastObservedPath != currentPath;
+
+    if (routeChanged) {
+      _lastObservedPath = currentPath;
+      _scheduleDockTintSample();
+      _scheduleDockTintSample(
+        delay: CineMotion.resolveDuration(
+          context,
+          const Duration(milliseconds: 440),
+          reduced: const Duration(milliseconds: 120),
+        ),
+      );
+    }
+
     return Scaffold(
       extendBody: true,
-      body: child,
+      body: RepaintBoundary(key: _contentRepaintKey, child: widget.child),
       bottomNavigationBar: SafeArea(
         top: false,
-        minimum: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-              decoration: BoxDecoration(
-                color: CinePalette.surface.withAlpha(176),
-                border: Border.all(color: CinePalette.stroke.withAlpha(130)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(80),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _MobileNavItem(
-                    icon: Icons.home_rounded,
-                    label: 'Home',
-                    active: currentPath == '/',
-                    onTap: () => context.go('/'),
-                  ),
-                  _MobileNavItem(
-                    icon: Icons.search_rounded,
-                    label: 'Search',
-                    active: currentPath.startsWith('/search'),
-                    onTap: () => context.go('/search'),
-                  ),
-                  _MobileNavItem(
-                    icon: Icons.bookmark_rounded,
-                    label: 'Saved',
-                    active: currentPath.startsWith('/watchlist'),
-                    onTap: () => context.go('/watchlist'),
-                  ),
-                  _MobileNavItem(
-                    icon: Icons.person_rounded,
-                    label: 'Profile',
-                    active: currentPath.startsWith('/profile'),
-                    onTap: () => context.go('/profile'),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        minimum: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        child: _LiquidGlassDock(
+          destinations: _destinations,
+          currentIndex: currentIndex,
+          adaptiveTint: _adaptiveDockTint,
+          onSelect: (index) {
+            if (index == currentIndex) return;
+            context.go(_destinations[index].path);
+          },
         ),
       ),
     );
   }
 }
 
-class _MobileNavItem extends StatelessWidget {
+class _MobileNavDestination {
   final IconData icon;
   final String label;
-  final bool active;
-  final VoidCallback onTap;
+  final String path;
 
-  const _MobileNavItem({
+  const _MobileNavDestination({
     required this.icon,
     required this.label,
-    required this.active,
-    required this.onTap,
+    required this.path,
+  });
+}
+
+class _LiquidGlassDock extends StatelessWidget {
+  final List<_MobileNavDestination> destinations;
+  final int currentIndex;
+  final Color adaptiveTint;
+  final ValueChanged<int> onSelect;
+
+  const _LiquidGlassDock({
+    required this.destinations,
+    required this.currentIndex,
+    required this.adaptiveTint,
+    required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      hoveredScale: 1,
-      pressedScale: 0.965,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 230),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          gradient: active
-              ? LinearGradient(
-                  colors: [
-                    CinePalette.accent.withAlpha(240),
-                    const Color(0xFFFFC561),
+    final media = MediaQuery.of(context);
+    final reduceMotion = CineMotion.reduceMotion(context);
+    final highContrast = media.highContrast;
+
+    final animationDuration = CineMotion.resolveDuration(
+      context,
+      CineMotion.medium,
+      reduced: const Duration(milliseconds: 90),
+    );
+    final animationCurve = CineMotion.resolveCurve(
+      context,
+      Curves.easeOutCubic,
+    );
+
+    final blurSigma = highContrast ? 8.0 : 24.0;
+    final baseFill = highContrast
+        ? CinePalette.surface.withAlpha(238)
+        : CinePalette.surface.withAlpha(150);
+
+    return TweenAnimationBuilder<Color?>(
+      duration: animationDuration,
+      curve: animationCurve,
+      tween: ColorTween(end: adaptiveTint),
+      builder: (context, animatedTint, _) {
+        final tint = animatedTint ?? adaptiveTint;
+        final tintHsl = HSLColor.fromColor(tint);
+        final capsulePrimary = highContrast
+            ? CinePalette.accent
+            : tintHsl
+                  .withSaturation((tintHsl.saturation + 0.18).clamp(0.35, 0.9))
+                  .withLightness((tintHsl.lightness * 0.88).clamp(0.33, 0.62))
+                  .toColor();
+        final capsulePrimaryHsl = HSLColor.fromColor(capsulePrimary);
+        final capsuleSecondary = highContrast
+            ? const Color(0xFFFFD787)
+            : capsulePrimaryHsl
+                  .withLightness(
+                    (capsulePrimaryHsl.lightness + 0.14).clamp(0.45, 0.78),
+                  )
+                  .toColor();
+        final activeForeground =
+            ThemeData.estimateBrightnessForColor(capsulePrimary) ==
+                Brightness.dark
+            ? Colors.white.withAlpha(245)
+            : const Color(0xFF130A00);
+        final inactiveForeground = highContrast
+            ? Colors.white.withAlpha(250)
+            : Color.lerp(
+                CinePalette.textMuted.withAlpha(235),
+                tint,
+                0.08,
+              )!.withAlpha(236);
+
+        final tintOverlay = highContrast
+            ? Colors.transparent
+            : tint.withAlpha(58);
+        final secondaryFill =
+            Color.lerp(baseFill, tintOverlay, 0.24) ?? tintOverlay;
+        final borderColor = highContrast
+            ? Colors.white.withAlpha(170)
+            : Color.lerp(
+                    Colors.white.withAlpha(86),
+                    tint.withAlpha(136),
+                    0.22,
+                  ) ??
+                  Colors.white.withAlpha(86);
+
+        return RepaintBoundary(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final slotWidth = constraints.maxWidth / destinations.length;
+              final capsuleWidth = (slotWidth - 12).clamp(54.0, 104.0);
+
+              return Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(105),
+                      blurRadius: 28,
+                      spreadRadius: -3,
+                      offset: const Offset(0, 16),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withAlpha(70),
+                      blurRadius: 14,
+                      spreadRadius: -5,
+                      offset: const Offset(0, 6),
+                    ),
                   ],
-                )
-              : null,
-          color: active ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 21,
-              color: active ? const Color(0xFF231801) : CinePalette.textMuted,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                color: active ? const Color(0xFF231801) : CinePalette.textMuted,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: blurSigma,
+                      sigmaY: blurSigma,
+                    ),
+                    child: Container(
+                      height: 82,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [baseFill, secondaryFill],
+                        ),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: 0,
+                            height: 27,
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.white.withAlpha(
+                                        highContrast ? 62 : 44,
+                                      ),
+                                      Colors.white.withAlpha(8),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          AnimatedPositioned(
+                            duration: animationDuration,
+                            curve: animationCurve,
+                            left:
+                                6 +
+                                (slotWidth * currentIndex) +
+                                (slotWidth - capsuleWidth) / 2,
+                            top: 7,
+                            width: capsuleWidth,
+                            height: 60,
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [capsulePrimary, capsuleSecondary],
+                                  ),
+                                  border: Border.all(
+                                    color: Colors.white.withAlpha(
+                                      highContrast ? 230 : 150,
+                                    ),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: capsulePrimary.withAlpha(110),
+                                      blurRadius: 20,
+                                      spreadRadius: -2,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (var i = 0; i < destinations.length; i++)
+                                Expanded(
+                                  child: _LiquidDockItem(
+                                    destination: destinations[i],
+                                    active: i == currentIndex,
+                                    activeColor: activeForeground,
+                                    inactiveColor: inactiveForeground,
+                                    onTap: () => onSelect(i),
+                                    animationDuration: animationDuration,
+                                    animationCurve: animationCurve,
+                                    reduceMotion: reduceMotion,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LiquidDockItem extends StatelessWidget {
+  final _MobileNavDestination destination;
+  final bool active;
+  final Color activeColor;
+  final Color inactiveColor;
+  final VoidCallback onTap;
+  final Duration animationDuration;
+  final Curve animationCurve;
+  final bool reduceMotion;
+
+  const _LiquidDockItem({
+    required this.destination,
+    required this.active,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.onTap,
+    required this.animationDuration,
+    required this.animationCurve,
+    required this.reduceMotion,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: active,
+      button: true,
+      label: destination.label,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: PressableScale(
+            onTap: onTap,
+            hoveredScale: 1,
+            pressedScale: 0.95,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: AnimatedSlide(
+                duration: animationDuration,
+                curve: animationCurve,
+                offset: active || reduceMotion
+                    ? Offset.zero
+                    : const Offset(0, 0.02),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedScale(
+                      duration: animationDuration,
+                      curve: animationCurve,
+                      scale: active && !reduceMotion ? 1.06 : 1,
+                      child: Icon(
+                        destination.icon,
+                        size: 22,
+                        color: active ? activeColor : inactiveColor,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    AnimatedDefaultTextStyle(
+                      duration: animationDuration,
+                      curve: animationCurve,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                        color: active ? activeColor : inactiveColor,
+                        letterSpacing: 0.1,
+                      ),
+                      child: Text(
+                        destination.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
